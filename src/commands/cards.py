@@ -61,7 +61,12 @@ async def view_card_command(interaction: Interaction, name: str):
         embed.add_field(name="Rarity", value=card[2])
         embed.add_field(name="Attack", value=card[3])
         embed.add_field(name="Defense", value=card[4])
-        embed.set_image(url=card[5])
+        embed.add_field(name="HP", value=card[5])
+
+        image_url = card[6]
+        if image_url and image_url.startswith("http"):
+            embed.set_image(url=image_url)
+
         await interaction.response.send_message(embed=embed)
     else:
         await interaction.response.send_message("Card not found.")
