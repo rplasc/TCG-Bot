@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS cards (
     rarity TEXT NOT NULL,
     attack INTEGER,
     defense INTEGER,
+    hp INTEGER,
     image TEXT,
     collection_id INTEGER,
     FOREIGN KEY (collection_id) REFERENCES collections(id)

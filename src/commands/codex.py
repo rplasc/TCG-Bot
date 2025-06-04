@@ -28,7 +28,7 @@ class CodexView(ui.View):
         for card in self.cards[start:end]:
             embed.add_field(
                 name=f"{card[1]} [#{card[0]}]",
-                value=f"Rarity: {card[2]}\nATK: {card[3]} | DEF: {card[4]}\nCollection: {card[5] or 'Unknown'}",
+                value=f"Rarity: {card[2]}\nATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}\nCollection: {card[6] or 'Unknown'}",
                 inline=False
             )
         return embed

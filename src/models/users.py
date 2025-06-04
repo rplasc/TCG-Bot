@@ -1,7 +1,9 @@
 USER_TABLE = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL
+    name TEXT NOT NULL,
+    coins INTEGER DEFAULT 35,
+    xp INTEGER DEFAULT 0
 );
 """
 

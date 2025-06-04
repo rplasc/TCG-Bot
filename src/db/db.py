@@ -1,8 +1,10 @@
 import os
+import datetime
 import aiosqlite
 from src.models.cards import CARD_TABLE
 from src.models.users import USER_TABLE, USER_CARDS_TABLE
 from src.models.collections import COLLECTIONS_TABLE
+from src.models.daily import DAILY_TABLE
 
 DB_PATH = "data/cards.db"
 
@@ -15,6 +17,7 @@ async def init_db():
         await db.execute(USER_TABLE)
         await db.execute(USER_CARDS_TABLE)
         await db.execute(COLLECTIONS_TABLE)
+        await db.execute(DAILY_TABLE)
         await db.commit()
 
 # Add user to db
@@ -43,7 +46,7 @@ async def add_to_user_collection(user_id, card_id):
 async def get_user_collection(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-            SELECT cards.id, cards.name, cards.rarity, cards.image, user_cards.quantity
+            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.hp, cards.image, user_cards.quantity
             FROM user_cards
             JOIN cards ON user_cards.card_id = cards.id
             WHERE user_cards.user_id = ?
@@ -51,7 +54,7 @@ async def get_user_collection(user_id):
         return await cursor.fetchall()
 
 # Add card to database
-async def add_card(name, rarity, attack, defense, image, collection_name=None):
+async def add_card(name, rarity, attack, defense, hp, image, collection_name=None):
     if collection_name:
         collection_id = await get_collection_id(collection_name)
         if not collection_id:
@@ -62,12 +65,19 @@ async def add_card(name, rarity, attack, defense, image, collection_name=None):
     try:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.execute(
-                "INSERT INTO cards (name, rarity, attack, defense, image, collection_id) VALUES (?, ?, ?, ?, ?, ?)",
-                (name, rarity, attack, defense, image, collection_id)
+                "INSERT INTO cards (name, rarity, attack, defense, hp, image, collection_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (name, rarity, attack, defense, hp, image, collection_id)
             )
             await db.commit()
     except aiosqlite.IntegrityError:
         raise ValueError(f"A card named '{name}' already exists.")
+    
+# Delete a card from database by name
+async def delete_card_by_name(name: str) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM cards WHERE LOWER(name) = LOWER(?)", (name,))
+        await db.commit()
+        return cursor.rowcount > 0
     
 # Create a card collection
 async def create_collection(name):
@@ -87,6 +97,13 @@ async def get_or_create_default_collection():
     await create_collection("Default Collection")
     return await get_collection_id("Default Collection")
 
+# Deletes a collection by name
+async def delete_collection_by_name(name: str) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM collections WHERE LOWER(name) = LOWER(?)", (name,))
+        await db.commit()
+        return cursor.rowcount > 0
+
 # Get card from databse by ID
 async def get_card(card_id):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -103,19 +120,80 @@ async def get_card_by_name(name):
 async def get_cards_by_collection(collection_name):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.image
+            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.hp, cards.image
             FROM cards
             JOIN collections ON cards.collection_id = collections.id
             WHERE LOWER(collections.name) = LOWER(?)
         """, (collection_name,))
         return await cursor.fetchall()
+    
 # Get all cards in database
 async def get_all_cards():
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, collections.name
+            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.hp, collections.name
             FROM cards
             LEFT JOIN collections ON cards.collection_id = collections.id
             ORDER BY cards.id ASC
         """)
+        return await cursor.fetchall()
+
+async def get_balance(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def set_balance(user_id, amount):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET coins = ? WHERE id = ?", (amount, user_id))
+        await db.commit()
+
+async def give_coins(user_id, amount):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (amount, user_id))
+        await db.commit()
+
+async def can_afford(user_id: int, cost: int) -> bool:
+    balance = await get_balance(user_id)
+    return balance is not None and balance >= cost
+
+async def deduct_coins(user_id: int, cost: int) -> bool:
+    if await can_afford(user_id, cost):
+        await set_balance(user_id, (await get_balance(user_id)) - cost)
+        return True
+    return False
+
+async def has_claimed_today(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT last_claimed FROM daily_cooldowns WHERE user_id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return False
+        last_claim = datetime.datetime.fromisoformat(row[0])
+        return last_claim.date() == datetime.datetime.now(datetime.timezone.utc).date()
+
+async def update_daily_claim(user_id: int):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO daily_cooldowns (user_id, last_claimed) VALUES (?, ?)", (user_id, now))
+        await db.commit()
+
+async def get_xp(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT xp FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def add_xp(user_id, amount):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET xp = xp + ? WHERE id = ?", (amount, user_id))
+        await db.commit()
+
+async def get_top_users_by_xp(limit=10):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT name, xp FROM users ORDER BY xp DESC LIMIT ?",
+            (limit,)
+        )
         return await cursor.fetchall()

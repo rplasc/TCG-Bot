@@ -1,6 +1,8 @@
 from discord import Interaction, Embed, Color, Object
 from src.aclient import client
-from src.db.db import get_user_collection, create_collection, get_cards_by_collection
+from src.db.db import get_user_collection, create_collection, get_cards_by_collection, delete_collection_by_name
+from src.utils.permissions import has_role
+from src.utils.confirmation import ConfirmActionView
 
 GUILD = Object(id=955464847028531280)
 
@@ -21,6 +23,7 @@ async def my_collection(interaction: Interaction):
     await interaction.response.send_message(embed=embed)
 
 @client.tree.command(name="create_collection", description="Create a new card collection", guild=GUILD)
+@has_role("ChopperDevTeam")
 async def createcollection(interaction: Interaction, name: str):
     await create_collection(name)
     await interaction.response.send_message(f"✅ Collection '{name}' created.")
@@ -40,3 +43,24 @@ async def view_collection(interaction: Interaction, name: str):
             inline=False
         )
     await interaction.response.send_message(embed=embed)
+
+@client.tree.command(name="delete_collection", description="Delete a collection by name", guild=GUILD)
+@has_role("ChopperDevTeam")
+async def delete_collection_command(interaction: Interaction, name: str):
+    embed = Embed(
+        title="⚠️ Confirm Collection Deletion",
+        description=f"Are you sure you want to delete the collection `{name}`?",
+        color=Color.red()
+    )
+
+    async def perform_deletion(_: Interaction):
+        return await delete_collection_by_name(name)
+
+    view = ConfirmActionView(
+        user_id=interaction.user.id,
+        action_fn=perform_deletion,
+        success_message=f"✅ Collection '{name}' has been deleted.",
+        failure_message=f"❌ Collection '{name}' was not found or couldn't be deleted.",
+    )
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
