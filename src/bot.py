@@ -1,7 +1,7 @@
 import os
 import discord
 from src.aclient import client
-from src.commands import cards, general, packs, collection
+from src.commands import cards, general, packs, collection, codex
 
 @client.event
 async def on_ready():

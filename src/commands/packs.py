@@ -26,12 +26,12 @@ async def draw_card():
             return None
         return random.choice(cards)
 
-@client.tree.command(name="openpack", description="Open a card pack!", guild=GUILD)
+@client.tree.command(name="open_pack", description="Open a card pack!", guild=GUILD)
 async def open_pack(interaction: Interaction):
     await register_user(interaction.user.id, interaction.user.name)
 
     pulled_cards = []
-    for _ in range(5):  # 5 cards per pack
+    for _ in range(1):  # 5 cards per pack
         card = await draw_card()
         if card:
             await add_to_user_collection(interaction.user.id, card[0])
