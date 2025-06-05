@@ -72,6 +72,8 @@ async def open_pack(interaction: Interaction):
     footer_notes = []
     total_xp = 0
 
+    legendary_pulled = False
+
     for _ in range(3):
         card = await draw_card()
         if not card:
@@ -84,6 +86,9 @@ async def open_pack(interaction: Interaction):
         emoji = RARITY_EMOJIS.get(rarity, "")
         coin_reward = DUPLICATE_REWARDS.get(rarity, 0)
 
+        if rarity == "legendary":
+            legendary_pulled = True
+
         if await user_owns_card(user_id, card_id):
             await give_coins(user_id, coin_reward)
             total_xp += xp_reward
@@ -94,7 +99,13 @@ async def open_pack(interaction: Interaction):
             pulled_cards.append(card)
             footer_notes.append(f"{emoji} {name} → +{xp_reward} XP")
 
-    embed = Embed(title="📦 You bought a pack!", description=f"Cost: {PACK_COST} coins", color=Color.gold())
+    embed_color = Color.gold() if legendary_pulled else Color.dark_blue()
+    embed = Embed(title="📦 You bought a pack!", description=f"Cost: {PACK_COST} coins", color=embed_color)
+
+    if legendary_pulled:
+        embed.title = "🌟 LEGENDARY PULL! 🌟"
+        embed.description += "\n🎉 You pulled a legendary card!"
+
     for card in pulled_cards:
         emoji = RARITY_EMOJIS.get(card[2].lower(), "")
         embed.add_field(
@@ -109,6 +120,8 @@ async def open_pack(interaction: Interaction):
     new_level, coins_awarded = await update_xp_and_check_level(user_id, total_xp)
     if new_level:
         embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
+    if legendary_pulled:
+        embed.set_thumbnail(url="https://media.discordapp.net/attachments/991418891832148060/1118801858090237992/shtlick.gif?ex=6842966d&is=684144ed&hm=c9a5ac854920e3c814c84cd3ff423e00af82d736c9f650f4306497d8d0e3316b&")
 
     footer_notes.append(f"Total XP: {total_xp}")
     embed.set_footer(text=" | ".join(footer_notes[-2:]))
@@ -146,7 +159,13 @@ async def daily(interaction: Interaction):
 
     new_level, coins_awarded = await update_xp_and_check_level(user_id, xp_reward)
 
-    embed = Embed(title="🎁 Daily Card Claimed!", description="Come back tomorrow for another.", color=Color.blue())
+    legendary_pulled = (rarity == "legendary")
+    embed_color = Color.gold() if legendary_pulled else Color.blue()
+    embed = Embed(
+        title="🎁 Daily Card Claimed!",
+        description="Come back tomorrow for another." + ("\n🌟 You pulled a legendary! 🌟" if legendary_pulled else ""),
+        color=embed_color
+    )
     embed.add_field(
         name=f"{emoji} {card[1]} [{card[2]}]",
         value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}\n{owned_text}",
@@ -157,5 +176,7 @@ async def daily(interaction: Interaction):
         embed.set_image(url=image_url)
     if new_level:
         embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
+    if legendary_pulled:
+        embed.set_thumbnail(url="https://media.discordapp.net/attachments/991418891832148060/1118801858090237992/shtlick.gif?ex=6842966d&is=684144ed&hm=c9a5ac854920e3c814c84cd3ff423e00af82d736c9f650f4306497d8d0e3316b&")
     embed.set_footer(text=f"+{xp_reward} XP earned")
     await interaction.response.send_message(embed=embed)
