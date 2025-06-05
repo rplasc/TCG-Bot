@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 import discord
 from src.aclient import client
-from src.commands import cards, general, packs, collection, codex, currency, xp, level
+from src.commands import cards, general, packs, collection, codex, currency, xp, level, casino
 from src.db.db import give_coins, register_user, init_db
 
 # Track last rewarded message timestamp
