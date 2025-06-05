@@ -27,7 +27,7 @@ async def add_card_command(
                 f"❌ Invalid rarity. Must be one of: {', '.join(RARITIES)}"
             )
             return
-        await add_card(name, rarity, attack, defense, hp, image.url, collection_name=collection)
+        await add_card(name, rarity.lower(), attack, defense, hp, image.url, collection_name=collection)
         await interaction.response.send_message(f"Card '{name}' added to collection '{collection or 'Default Collection'}'.")
     except ValueError as e:
         await interaction.response.send_message(str(e))
@@ -90,7 +90,7 @@ async def edit_card_command(
             defense=defense,
             hp=hp,
             image=image,
-            rarity=rarity,
+            rarity=rarity.lower() if rarity else None,
             collection_name=collection
         )
 

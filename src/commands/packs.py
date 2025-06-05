@@ -9,15 +9,15 @@ GUILD = Object(id=955464847028531280)
 RARITY_POOL = {
     "common": 70,
     "rare": 20,
-    "epic": 8,
-    "legendary": 2,
+    "epic": 9,
+    "legendary": 1,
 }
 
 RARITY_POOL_DAILY = {
-    "common": 50,
-    "rare": 30,
-    "epic": 15,
-    "legendary": 5
+    "common": 51,
+    "rare": 31,
+    "epic": 16,
+    "legendary": 2
 }
 
 RARITY_XP = {
