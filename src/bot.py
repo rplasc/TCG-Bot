@@ -33,11 +33,11 @@ def calculate_message_reward(message: str) -> int:
     if length < 100:
         return 1
     elif length < 300:
-        return 5
+        return 3
     elif length < 500:
-        return 10
+        return 5
     else:
-        return 15
+        return 10
 
 @client.event
 async def on_message(message: discord.Message):

@@ -5,6 +5,7 @@ from src.models.cards import CARD_TABLE
 from src.models.users import USER_TABLE, USER_CARDS_TABLE
 from src.models.collections import COLLECTIONS_TABLE
 from src.models.daily import DAILY_TABLE
+from src.models.progress import COLLECTION_REWARDS_TABLE
 
 DB_PATH = "data/cards.db"
 
@@ -18,6 +19,7 @@ async def init_db():
         await db.execute(USER_CARDS_TABLE)
         await db.execute(COLLECTIONS_TABLE)
         await db.execute(DAILY_TABLE)
+        await db.execute(COLLECTION_REWARDS_TABLE)
         await db.commit()
 
 # Add user to db
@@ -238,3 +240,52 @@ async def user_owns_card(user_id: int, card_id: int) -> bool:
             SELECT 1 FROM user_cards WHERE user_id = ? AND card_id = ?
         """, (user_id, card_id))
         return await cursor.fetchone() is not None
+
+async def get_card_ids_in_collection(collection_name: str) -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT cards.id
+            FROM cards
+            JOIN collections ON cards.collection_id = collections.id
+            WHERE LOWER(collections.name) = LOWER(?)
+        """, (collection_name,))
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+async def get_user_owned_card_ids(user_id: int) -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT card_id FROM user_cards WHERE user_id = ?
+        """, (user_id,))
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+async def has_claimed_collection_reward(user_id: int, collection_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT 1 FROM collection_rewards WHERE user_id = ? AND collection_id = ?",
+            (user_id, collection_id)
+        )
+        return await cursor.fetchone() is not None
+
+async def claim_collection_reward(user_id: int, collection_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO collection_rewards (user_id, collection_id) VALUES (?, ?)",
+            (user_id, collection_id)
+        )
+        await db.commit()
+
+async def get_missing_cards_in_collection(user_id: int, collection_name: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT cards.name
+            FROM cards
+            JOIN collections ON cards.collection_id = collections.id
+            WHERE LOWER(collections.name) = LOWER(?)
+            AND cards.id NOT IN (
+                SELECT card_id FROM user_cards WHERE user_id = ?
+            )
+        """, (collection_name, user_id))
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
