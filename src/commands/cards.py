@@ -1,6 +1,6 @@
 from discord import Interaction, Embed, Color, Attachment, ui, ButtonStyle, Object
 from discord.ext import commands
-from src.db.db import add_card, get_card_by_name, delete_card_by_name
+from src.db.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name
 from src.aclient import client
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView
@@ -70,3 +70,46 @@ async def view_card_command(interaction: Interaction, name: str):
         await interaction.response.send_message(embed=embed)
     else:
         await interaction.response.send_message("Card not found.")
+
+@client.tree.command(name="edit_card", description="Edit an existing card", guild=GUILD)
+@has_role("ChopperDevTeam")
+async def edit_card_command(
+    interaction: Interaction,
+    name: str,
+    attack: int = None,
+    defense: int = None,
+    hp: str = None,
+    image: str = None,
+    rarity: str = None,
+    collection: str = None
+):
+    try:
+        await update_card_by_name(
+            name,
+            attack=attack,
+            defense=defense,
+            hp=hp,
+            image=image,
+            rarity=rarity,
+            collection_name=collection
+        )
+
+        card = await get_card_by_name(name)
+        if not card:
+            await interaction.response.send_message(f"✅ Card updated but not found afterward. Please check the name.", ephemeral=True)
+            return
+
+        embed = Embed(title=f"{card[1]} (#{card[0]})", color=Color.orange())
+        embed.add_field(name="Rarity", value=card[2])
+        embed.add_field(name="Attack", value=card[3])
+        embed.add_field(name="Defense", value=card[4])
+        embed.add_field(name="HP", value=card[5])
+
+        image_url = card[6]
+        if image_url and image_url.startswith("http"):
+            embed.set_image(url=image_url)
+
+        await interaction.response.send_message(content=f"✅ Card '{name}' updated.", embed=embed)
+
+    except ValueError as e:
+        await interaction.response.send_message(f"❌ {str(e)}", ephemeral=True)

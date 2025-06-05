@@ -46,7 +46,7 @@ async def add_to_user_collection(user_id, card_id):
 async def get_user_collection(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("""
-            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.hp, cards.image, user_cards.quantity
+            SELECT cards.id, cards.name, cards.rarity, cards.attack, cards.defense, cards.hp, cards.image
             FROM user_cards
             JOIN cards ON user_cards.card_id = cards.id
             WHERE user_cards.user_id = ?
@@ -197,3 +197,44 @@ async def get_top_users_by_xp(limit=10):
             (limit,)
         )
         return await cursor.fetchall()
+
+async def update_card_by_name(name, *, attack=None, defense=None, hp=None, image=None, rarity=None, collection_name=None):
+    async with aiosqlite.connect(DB_PATH) as db:
+        updates = []
+        params = []
+
+        if attack is not None:
+            updates.append("attack = ?")
+            params.append(attack)
+        if defense is not None:
+            updates.append("defense = ?")
+            params.append(defense)
+        if hp is not None:
+            updates.append("hp = ?")
+            params.append(hp)
+        if image is not None:
+            updates.append("image = ?")
+            params.append(image)
+        if rarity is not None:
+            updates.append("rarity = ?")
+            params.append(rarity)
+        if collection_name is not None:
+            collection_id = await get_collection_id(collection_name)
+            if not collection_id:
+                raise ValueError(f"Collection '{collection_name}' not found.")
+            updates.append("collection_id = ?")
+            params.append(collection_id)
+
+        if not updates:
+            raise ValueError("No fields provided to update.")
+
+        params.append(name)
+        await db.execute(f"UPDATE cards SET {', '.join(updates)} WHERE LOWER(name) = LOWER(?)", params)
+        await db.commit()
+
+async def user_owns_card(user_id: int, card_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT 1 FROM user_cards WHERE user_id = ? AND card_id = ?
+        """, (user_id, card_id))
+        return await cursor.fetchone() is not None

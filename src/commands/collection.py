@@ -10,17 +10,33 @@ GUILD = Object(id=955464847028531280)
 async def my_collection(interaction: Interaction):
     cards = await get_user_collection(interaction.user.id)
     if not cards:
-        await interaction.response.send_message("You don’t own any cards yet.")
+        await interaction.response.send_message("🗃️ You don’t own any cards yet.")
         return
 
-    embed = Embed(title=f"{interaction.user.name}'s Collection", color=Color.blue())
+    embed = Embed(
+        title=f"🗂️ {interaction.user.name}'s Card Collection",
+        description=f"Total unique cards: {len(cards)}",
+        color=Color.teal()
+    )
+
     for card in cards:
-        embed.add_field(
-            name=f"{card[1]} ({card[2]})",
-            value=f"Qty: {card[4]}",
-            inline=False
-        )
+        if len(card) >= 7:
+            name = card[1]
+            rarity = card[2]
+            atk = card[3]
+            defense = card[4]
+            hp = card[5]
+
+            embed.add_field(
+                name=f"🃏 {name} ({rarity.title()})",
+                value=f"**ATK:** {atk} | **DEF:** {defense} | **HP:** {hp}",
+                inline=False
+            )
+        else:
+            embed.add_field(name="⚠️ Invalid Card", value="This card entry is incomplete.", inline=False)
+
     await interaction.response.send_message(embed=embed)
+
 
 @client.tree.command(name="create_collection", description="Create a new card collection", guild=GUILD)
 @has_role("ChopperDevTeam")
