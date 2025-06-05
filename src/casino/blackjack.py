@@ -4,6 +4,9 @@ from src.db.db import register_user, can_afford, deduct_coins, give_coins
 from src.casino.logic import draw_card, hand_total
 from src.casino.types import BlackjackSession
 
+# Key: user_id → Value: BlackjackSession
+active_sessions = {}
+
 def render_blackjack_embed(session: BlackjackSession, footer=None):
     embed = Embed(title="🃏 Blackjack", color=Color.dark_purple())
     embed.add_field(name="Your Hand", value=f"{' '.join(session.player_hand)} = {hand_total(session.player_hand)}", inline=True)
@@ -29,16 +32,24 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
         return f"⚖️ Tie! Your bet was returned."
     else:
         return f"😢 Dealer wins. You lost your bet."
-
+    
 class BlackjackView(ui.View):
     def __init__(self, session: BlackjackSession):
         super().__init__(timeout=60)
         self.session = session
 
+    async def on_timeout(self):
+        session = active_sessions.get(self.session.user_id)
+        if session:
+            session.finished = True
+            active_sessions.pop(session.user_id, None)
+
     @ui.button(label="Hit", style=ButtonStyle.green)
     async def hit(self, interaction: Interaction, button: ui.Button):
-        if interaction.user.id != self.session.user_id:
-            await interaction.response.send_message("❌ Not your game.", ephemeral=True)
+        session = active_sessions.get(interaction.user.id)
+
+        if not session or session.finished:
+            await interaction.response.send_message("❌ No active session.", ephemeral=True)
             return
 
         self.session.player_hand.append(draw_card())
@@ -46,22 +57,29 @@ class BlackjackView(ui.View):
 
         if total > 21:
             self.session.finished = True
+            active_sessions.pop(self.session.user_id, None)
             await interaction.response.edit_message(embed=render_blackjack_embed(self.session, "💥 Bust! You lose."), view=None)
         else:
             await interaction.response.edit_message(embed=render_blackjack_embed(self.session), view=self)
 
     @ui.button(label="Stand", style=ButtonStyle.blurple)
     async def stand(self, interaction: Interaction, button: ui.Button):
-        if interaction.user.id != self.session.user_id:
-            await interaction.response.send_message("❌ Not your game.", ephemeral=True)
+        session = active_sessions.get(interaction.user.id)
+
+        if not session or session.finished:
+            await interaction.response.send_message("❌ No active session.", ephemeral=True)
             return
 
         self.session.finished = True
+        active_sessions.pop(self.session.user_id, None)
         result = await resolve_blackjack(interaction, self.session)
         await interaction.response.edit_message(embed=render_blackjack_embed(self.session, result), view=None)
 
 async def start_blackjack(interaction: Interaction):
     user_id = interaction.user.id
+    if user_id in active_sessions:
+        await interaction.response.send_message("❗ You're already in a Blackjack game.", ephemeral=True)
+        return
     await register_user(user_id, interaction.user.name)
 
     class WagerModal(ui.Modal, title="Place Your Wager"):
@@ -87,6 +105,7 @@ async def start_blackjack(interaction: Interaction):
 
 async def play_blackjack(interaction: Interaction, bet: int):
     session = BlackjackSession(user_id=interaction.user.id, bet=bet)
+    active_sessions[session.user_id] = session
     view = BlackjackView(session)
     embed = render_blackjack_embed(session)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
