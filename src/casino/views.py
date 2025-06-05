@@ -13,3 +13,11 @@ class CasinoView(ui.View):
             return
 
         await start_blackjack(interaction)
+    
+    @ui.button(label="🎰 Slots", style=ButtonStyle.green, custom_id="slots")
+    async def slots_button(self, interaction: Interaction, button: ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Not your casino session.", ephemeral=True)
+            return
+        from src.casino.slots import play_slots
+        await play_slots(interaction)
