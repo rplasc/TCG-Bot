@@ -3,9 +3,10 @@ from src.aclient import client
 from src.shop.logic import (handle_card_purchase, CARD_SHOP_PRICES, RARITY_EMOJIS,
                              draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
 from src.shop.views import ShopView
-from src.db.db import (register_user, update_daily_claim, has_claimed_today, add_to_user_collection, user_owns_card,
-                        give_coins, update_xp_and_check_level, refresh_daily_shop, get_daily_shop_cards, format_duration,
+from src.db.db import (register_user, update_daily_claim, get_last_daily_claim, add_to_user_collection, user_owns_card,
+                        give_coins, update_xp_and_check_level, get_daily_shop_cards, format_duration,
                           get_seconds_until_next_rotation)
+from src.utils.time import get_time_until_next_daily
 
 GUILD = Object(id=955464847028531280)
 
@@ -61,9 +62,15 @@ async def daily(interaction: Interaction):
     username = interaction.user.name
     await register_user(user_id, username)
 
-    if await has_claimed_today(user_id):
-        await interaction.response.send_message("⏱ You’ve already claimed your daily card. Try again tomorrow!", ephemeral=True)
-        return
+    last_claimed = await get_last_daily_claim(user_id)
+    if last_claimed:
+        cooldown = get_time_until_next_daily(last_claimed)
+        if cooldown:
+            await interaction.response.send_message(
+                f"⏳ You’ve already claimed your daily card.\nTry again in **{cooldown}**.",
+                ephemeral=True
+            )
+            return
 
     await update_daily_claim(user_id)
 

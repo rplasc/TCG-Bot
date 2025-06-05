@@ -183,14 +183,11 @@ async def deduct_coins(user_id: int, cost: int) -> bool:
         return True
     return False
 
-async def has_claimed_today(user_id: int) -> bool:
+async def get_last_daily_claim(user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT last_claimed FROM daily_cooldowns WHERE user_id = ?", (user_id,))
         row = await cursor.fetchone()
-        if not row:
-            return False
-        last_claim = datetime.datetime.fromisoformat(row[0])
-        return last_claim.date() == datetime.datetime.now(datetime.timezone.utc).date()
+        return row[0] if row else None
 
 async def update_daily_claim(user_id: int):
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
