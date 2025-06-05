@@ -1,0 +1,7 @@
+DAILY_SHOP_TABLE = """
+CREATE TABLE IF NOT EXISTS daily_shop (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id INTEGER,
+    date TEXT
+);
+"""

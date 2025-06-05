@@ -1,131 +1,59 @@
-import random
-from discord import Embed, Interaction, Color, Object
+from discord import Embed, Interaction, Color, Object, ui, ButtonStyle
 from src.aclient import client
-from src.db.db import register_user, add_to_user_collection, can_afford, deduct_coins, has_claimed_today, update_daily_claim, give_coins, user_owns_card, update_xp_and_check_level
-import aiosqlite
+from src.shop.logic import (handle_card_purchase, CARD_SHOP_PRICES, RARITY_EMOJIS,
+                             draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
+from src.shop.views import ShopView
+from src.db.db import (register_user, update_daily_claim, has_claimed_today, add_to_user_collection, user_owns_card,
+                        give_coins, update_xp_and_check_level, refresh_daily_shop, get_daily_shop_cards, format_duration,
+                          get_seconds_until_next_rotation)
 
 GUILD = Object(id=955464847028531280)
 
-RARITY_POOL = {
-    "common": 70,
-    "rare": 20,
-    "epic": 9,
-    "legendary": 1,
-}
+@client.tree.command(name="pack_shop", description="View and purchase card packs", guild=GUILD)
+async def pack_shop(interaction: Interaction):
+    await interaction.response.send_message("🛍️ Welcome to the Card Pack Shop! Choose a pack below:", view=ShopView(interaction.user.id), ephemeral=True)
 
-RARITY_POOL_DAILY = {
-    "common": 51,
-    "rare": 31,
-    "epic": 16,
-    "legendary": 2
-}
-
-RARITY_XP = {
-    "common": 5,
-    "rare": 20,
-    "epic": 35,
-    "legendary": 50
-}
-
-RARITY_EMOJIS = {
-    "common": "🟩",
-    "rare": "🟦",
-    "epic": "🟪",
-    "legendary": "🟨"
-}
-
-DUPLICATE_REWARDS = {
-    "common": 10,
-    "rare": 15,
-    "epic": 30,
-    "legendary": 50
-}
-
-async def draw_card(pool=None):
-    pool = pool or RARITY_POOL
-    rarities = list(pool.keys())
-    weights = list(pool.values())
-    chosen_rarity = random.choices(rarities, weights=weights)[0]
-
-    async with aiosqlite.connect("data/cards.db") as db:
-        cursor = await db.execute("SELECT * FROM cards WHERE rarity = ?", (chosen_rarity,))
-        cards = await cursor.fetchall()
-        if not cards:
-            print(f"[WARN] No cards found for rarity: {chosen_rarity}")
-            return None
-        return random.choice(cards)
-
-@client.tree.command(name="open_pack", description="Open a card pack for 50 coins.", guild=GUILD)
-async def open_pack(interaction: Interaction):
-    user_id = interaction.user.id
-    username = interaction.user.name
-    await register_user(user_id, username)
-
-    PACK_COST = 50
-    if not await can_afford(user_id, PACK_COST):
-        await interaction.response.send_message("❌ You don't have enough coins to buy a pack.", ephemeral=True)
+@client.tree.command(name="shop_cards", description="View today's cards for sale", guild=GUILD)
+async def shop_cards(interaction: Interaction):
+    cards = await get_daily_shop_cards()
+    if not cards:
+        await interaction.response.send_message("🛍️ No cards available today!", ephemeral=True)
         return
 
-    await deduct_coins(user_id, PACK_COST)
+    rotation_in = format_duration(get_seconds_until_next_rotation())
 
-    pulled_cards = []
-    footer_notes = []
-    total_xp = 0
+    embed = Embed(
+        title="🛒 Daily Card Shop",
+        description=f"Available for purchase today only!\n⏳ Next rotation in: **{rotation_in}**",
+        color=Color.orange()
+    )
+    view = ui.View()
 
-    legendary_pulled = False
-
-    for _ in range(3):
-        card = await draw_card()
-        if not card:
-            continue
-
-        card_id = card[0]
-        name = card[1]
+    for card in cards:
         rarity = card[2].lower()
-        xp_reward = RARITY_XP.get(rarity, 0)
+        price = CARD_SHOP_PRICES.get(rarity, 50)
         emoji = RARITY_EMOJIS.get(rarity, "")
-        coin_reward = DUPLICATE_REWARDS.get(rarity, 0)
+        button = ui.Button(
+            label=f"Buy {card[1]} ({rarity.title()}) - {price} coins",
+            style=ButtonStyle.green,
+            custom_id=f"buycard_{card[0]}"
+        )
+        view.add_item(button)
 
-        if rarity == "legendary":
-            legendary_pulled = True
-
-        if await user_owns_card(user_id, card_id):
-            await give_coins(user_id, coin_reward)
-            total_xp += xp_reward
-            footer_notes.append(f"{emoji} {name} (dupe) → +{coin_reward} coins, +{xp_reward} XP")
-        else:
-            await add_to_user_collection(user_id, card_id)
-            total_xp += xp_reward
-            pulled_cards.append(card)
-            footer_notes.append(f"{emoji} {name} → +{xp_reward} XP")
-
-    embed_color = Color.gold() if legendary_pulled else Color.dark_blue()
-    embed = Embed(title="📦 You bought a pack!", description=f"Cost: {PACK_COST} coins", color=embed_color)
-
-    if legendary_pulled:
-        embed.title = "🌟 LEGENDARY PULL! 🌟"
-        embed.description += "\n🎉 You pulled a legendary card!"
-
-    for card in pulled_cards:
-        emoji = RARITY_EMOJIS.get(card[2].lower(), "")
         embed.add_field(
             name=f"{emoji} {card[1]} [{card[2]}]",
             value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}",
             inline=False
         )
-        image_url = card[6]
-        if isinstance(image_url, str) and image_url.startswith("http"):
-            embed.set_image(url=image_url)
 
-    new_level, coins_awarded = await update_xp_and_check_level(user_id, total_xp)
-    if new_level:
-        embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
-    if legendary_pulled:
-        embed.set_thumbnail(url="https://media.discordapp.net/attachments/991418891832148060/1118801858090237992/shtlick.gif?ex=6842966d&is=684144ed&hm=c9a5ac854920e3c814c84cd3ff423e00af82d736c9f650f4306497d8d0e3316b&")
+    async def button_callback(interaction: Interaction):
+        card_id = int(interaction.data['custom_id'].split("_")[1])
+        await handle_card_purchase(interaction, card_id)
 
-    footer_notes.append(f"Total XP: {total_xp}")
-    embed.set_footer(text=" | ".join(footer_notes[-2:]))
-    await interaction.response.send_message(embed=embed)
+    for item in view.children:
+        item.callback = button_callback
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @client.tree.command(name="daily", description="Claim your daily free pack", guild=GUILD)
 async def daily(interaction: Interaction):

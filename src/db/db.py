@@ -1,11 +1,13 @@
 import os
 import datetime
+import random
 import aiosqlite
 from src.models.cards import CARD_TABLE
 from src.models.users import USER_TABLE, USER_CARDS_TABLE
 from src.models.collections import COLLECTIONS_TABLE
 from src.models.daily import DAILY_TABLE
 from src.models.progress import COLLECTION_REWARDS_TABLE
+from src.models.shop import DAILY_SHOP_TABLE
 
 DB_PATH = "data/cards.db"
 
@@ -20,10 +22,22 @@ async def init_db():
         await db.execute(COLLECTIONS_TABLE)
         await db.execute(DAILY_TABLE)
         await db.execute(COLLECTION_REWARDS_TABLE)
+        await db.execute(DAILY_SHOP_TABLE)
         await db.commit()
 
 def calculate_level(xp: int) -> int:
     return int((xp / 100) ** 0.5) # quadratic scale for levels
+
+# In-memory cache
+_daily_shop_cache = {
+    "key": None,
+    "cards": []
+}
+
+# For manual reset
+def clear_daily_shop_cache():
+    _daily_shop_cache["date"] = None
+    _daily_shop_cache["cards"] = []
 
 # Add user to db
 async def register_user(user_id, name):
@@ -310,3 +324,62 @@ async def get_missing_cards_in_collection(user_id: int, collection_name: str):
         """, (collection_name, user_id))
         rows = await cursor.fetchall()
         return [row[0] for row in rows]
+
+async def refresh_daily_shop(rotation_key: str, num_cards: int = 5):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM daily_shop WHERE date != ?", (rotation_key,))
+        cursor = await db.execute("SELECT COUNT(*) FROM daily_shop WHERE date = ?", (rotation_key,))
+        if (await cursor.fetchone())[0] > 0:
+            return  # Already populated
+
+        cursor = await db.execute("SELECT id FROM cards")
+        all_card_ids = [row[0] for row in await cursor.fetchall()]
+        chosen = random.sample(all_card_ids, min(num_cards, len(all_card_ids)))
+
+        for cid in chosen:
+            await db.execute("INSERT INTO daily_shop (card_id, date) VALUES (?, ?)", (cid, rotation_key))
+        await db.commit()
+
+def get_shop_rotation_key():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    rotation_hour = 15  # 3 PM UTC
+
+    if now.hour < rotation_hour:
+        rotation_day = now.date() - datetime.timedelta(days=1)
+    else:
+        rotation_day = now.date()
+
+    return rotation_day.isoformat()
+
+async def get_daily_shop_cards():
+    key = get_shop_rotation_key()
+
+    if _daily_shop_cache["key"] == key and _daily_shop_cache["cards"]:
+        return _daily_shop_cache["cards"]
+
+    await refresh_daily_shop(key)  # ensure DB matches
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT cards.*
+            FROM cards
+            JOIN daily_shop ON cards.id = daily_shop.card_id
+            WHERE daily_shop.date = ?
+        """, (key,))
+        cards = await cursor.fetchall()
+
+    _daily_shop_cache["key"] = key
+    _daily_shop_cache["cards"] = cards
+    return cards
+
+def get_seconds_until_next_rotation():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    next_rotation = now.replace(hour=15, minute=0, second=0, microsecond=0)
+    if now.hour >= 15:
+        next_rotation += datetime.timedelta(days=1)
+    return (next_rotation - now).total_seconds()
+
+def format_duration(seconds: int) -> str:
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    return f"{hours}h {minutes}m"
