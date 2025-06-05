@@ -1,6 +1,6 @@
 from discord import Interaction, Embed, Color, Object
 from src.aclient import client
-from src.db.db import get_user_collection, create_collection, get_cards_by_collection, delete_collection_by_name, get_card_ids_in_collection, get_user_owned_card_ids, get_missing_cards_in_collection, get_collection_id, has_claimed_collection_reward, claim_collection_reward, give_coins, add_xp
+from src.db.db import get_user_collection, create_collection, get_cards_by_collection, delete_collection_by_name, get_card_ids_in_collection, get_user_owned_card_ids, get_missing_cards_in_collection, get_collection_id, has_claimed_collection_reward, claim_collection_reward, give_coins, update_xp_and_check_level
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView
 
@@ -103,9 +103,12 @@ async def collection_progress(interaction: Interaction, collection: str):
     if owned == total:
         if not await has_claimed_collection_reward(user_id, collection_id):
             await claim_collection_reward(user_id, collection_id)
-            await give_coins(user_id, 250)
-            await add_xp(user_id, 100)
-            embed.add_field(name="🎁 Reward", value="You earned 250 coins and 100 XP!", inline=False)
+            await give_coins(user_id, 200)
+            new_level, coins_awarded = await update_xp_and_check_level(user_id, 250)
+            if new_level:
+                embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
+
+            embed.add_field(name="🎁 Reward", value="You earned 200 coins and 250 XP!", inline=False)
         else:
             embed.add_field(name="🎁", value="You've already claimed the reward for this collection.", inline=False)
 

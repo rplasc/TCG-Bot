@@ -22,6 +22,9 @@ async def init_db():
         await db.execute(COLLECTION_REWARDS_TABLE)
         await db.commit()
 
+def calculate_level(xp: int) -> int:
+    return int((xp / 100) ** 0.5) # quadratic scale for levels
+
 # Add user to db
 async def register_user(user_id, name):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -187,10 +190,28 @@ async def get_xp(user_id):
         row = await cursor.fetchone()
         return row[0] if row else 0
 
-async def add_xp(user_id, amount):
+async def update_xp_and_check_level(user_id: int, xp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET xp = xp + ? WHERE id = ?", (amount, user_id))
+        # Get current XP and level
+        cursor = await db.execute("SELECT xp, level FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return  # user not registered
+
+        old_xp, old_level = row
+        new_xp = old_xp + xp_gain
+        new_level = calculate_level(new_xp)
+
+        await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", (new_xp, new_level, user_id))
+
+        if new_level > old_level:
+            coins_gained = (new_level - old_level) * 5
+            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (coins_gained, user_id))
+            await db.commit()
+            return new_level, coins_gained  # Level up occurred
+
         await db.commit()
+        return None, 0  # No level up
 
 async def get_top_users_by_xp(limit=10):
     async with aiosqlite.connect(DB_PATH) as db:

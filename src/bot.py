@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 import discord
 from src.aclient import client
-from src.commands import cards, general, packs, collection, codex, currency, xp
+from src.commands import cards, general, packs, collection, codex, currency, xp, level
 from src.db.db import give_coins, register_user, init_db
 
 # Track last rewarded message timestamp
@@ -33,11 +33,11 @@ def calculate_message_reward(message: str) -> int:
     if length < 100:
         return 1
     elif length < 300:
-        return 3
+        return 2
     elif length < 500:
-        return 5
+        return 3
     else:
-        return 10
+        return 5
 
 @client.event
 async def on_message(message: discord.Message):

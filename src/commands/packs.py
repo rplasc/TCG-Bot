@@ -1,7 +1,7 @@
 import random
 from discord import Embed, Interaction, Color, Object
 from src.aclient import client
-from src.db.db import register_user, add_to_user_collection, can_afford, deduct_coins, has_claimed_today, update_daily_claim, add_xp, give_coins, user_owns_card
+from src.db.db import register_user, add_to_user_collection, can_afford, deduct_coins, has_claimed_today, update_daily_claim, give_coins, user_owns_card, update_xp_and_check_level
 import aiosqlite
 
 GUILD = Object(id=955464847028531280)
@@ -27,6 +27,20 @@ RARITY_XP = {
     "legendary": 50
 }
 
+RARITY_EMOJIS = {
+    "common": "🟩",
+    "rare": "🟦",
+    "epic": "🟪",
+    "legendary": "🟨"
+}
+
+DUPLICATE_REWARDS = {
+    "common": 10,
+    "rare": 15,
+    "epic": 30,
+    "legendary": 50
+}
+
 async def draw_card(pool=None):
     pool = pool or RARITY_POOL
     rarities = list(pool.keys())
@@ -41,13 +55,13 @@ async def draw_card(pool=None):
             return None
         return random.choice(cards)
 
-@client.tree.command(name="open_pack", description="Open a card pack for 35 coins.", guild=GUILD)
+@client.tree.command(name="open_pack", description="Open a card pack for 50 coins.", guild=GUILD)
 async def open_pack(interaction: Interaction):
     user_id = interaction.user.id
     username = interaction.user.name
     await register_user(user_id, username)
 
-    PACK_COST = 35
+    PACK_COST = 50
     if not await can_afford(user_id, PACK_COST):
         await interaction.response.send_message("❌ You don't have enough coins to buy a pack.", ephemeral=True)
         return
@@ -55,39 +69,49 @@ async def open_pack(interaction: Interaction):
     await deduct_coins(user_id, PACK_COST)
 
     pulled_cards = []
+    footer_notes = []
     total_xp = 0
-    duplicate_coins = 15  # or scale by rarity if you prefer
 
-    for _ in range(1):
+    for _ in range(3):
         card = await draw_card()
         if not card:
             continue
 
         card_id = card[0]
+        name = card[1]
         rarity = card[2].lower()
         xp_reward = RARITY_XP.get(rarity, 0)
+        emoji = RARITY_EMOJIS.get(rarity, "")
+        coin_reward = DUPLICATE_REWARDS.get(rarity, 0)
 
-    if await user_owns_card(user_id, card_id):
-        await give_coins(user_id, duplicate_coins)
-        await add_xp(user_id, xp_reward)
-        total_xp += xp_reward
-        footer_note = f"Duplicate! +{duplicate_coins} coins, +{xp_reward} XP"
-    else:
-        await add_to_user_collection(user_id, card_id)
-        total_xp += xp_reward
-        pulled_cards.append(card)
-        footer_note = f"+{xp_reward} XP earned"
-
-    await add_xp(user_id, total_xp)
+        if await user_owns_card(user_id, card_id):
+            await give_coins(user_id, coin_reward)
+            total_xp += xp_reward
+            footer_notes.append(f"{emoji} {name} (dupe) → +{coin_reward} coins, +{xp_reward} XP")
+        else:
+            await add_to_user_collection(user_id, card_id)
+            total_xp += xp_reward
+            pulled_cards.append(card)
+            footer_notes.append(f"{emoji} {name} → +{xp_reward} XP")
 
     embed = Embed(title="📦 You bought a pack!", description=f"Cost: {PACK_COST} coins", color=Color.gold())
     for card in pulled_cards:
-        embed.add_field(name=f"{card[1]} [{card[2]}]", value=f"ATK: {card[3]} | DEF: {card[4]}", inline=False)
+        emoji = RARITY_EMOJIS.get(card[2].lower(), "")
+        embed.add_field(
+            name=f"{emoji} {card[1]} [{card[2]}]",
+            value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}",
+            inline=False
+        )
         image_url = card[6]
         if isinstance(image_url, str) and image_url.startswith("http"):
             embed.set_image(url=image_url)
 
-    embed.set_footer(text=f"{footer_note} | Total XP: {total_xp}")
+    new_level, coins_awarded = await update_xp_and_check_level(user_id, total_xp)
+    if new_level:
+        embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
+
+    footer_notes.append(f"Total XP: {total_xp}")
+    embed.set_footer(text=" | ".join(footer_notes[-2:]))
     await interaction.response.send_message(embed=embed)
 
 @client.tree.command(name="daily", description="Claim your daily free pack", guild=GUILD)
@@ -109,23 +133,29 @@ async def daily(interaction: Interaction):
 
     card_id = card[0]
     rarity = card[2].lower()
+    emoji = RARITY_EMOJIS.get(rarity, "")
     xp_reward = RARITY_XP.get(rarity, 0)
+    coin_reward = DUPLICATE_REWARDS.get(rarity, 0)
 
     if await user_owns_card(user_id, card_id):
-        await give_coins(user_id, 15)
-        await add_xp(user_id, xp_reward)
-        footer = f"Duplicate! +15 coins, +{xp_reward} XP"
+        await give_coins(user_id, coin_reward)
+        owned_text = f"(dupe) → +{coin_reward} coins"
     else:
         await add_to_user_collection(user_id, card_id)
-        await add_xp(user_id, xp_reward)
-        footer = f"+{xp_reward} XP earned"
+        owned_text = ""
+
+    new_level, coins_awarded = await update_xp_and_check_level(user_id, xp_reward)
 
     embed = Embed(title="🎁 Daily Card Claimed!", description="Come back tomorrow for another.", color=Color.blue())
     embed.add_field(
-        name=f"{card[1]} [{card[2]}]",
-        value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}",
+        name=f"{emoji} {card[1]} [{card[2]}]",
+        value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}\n{owned_text}",
         inline=False
     )
-    embed.set_image(url=card[6])
+    image_url = card[6]
+    if isinstance(image_url, str) and image_url.startswith("http"):
+        embed.set_image(url=image_url)
+    if new_level:
+        embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
     embed.set_footer(text=f"+{xp_reward} XP earned")
     await interaction.response.send_message(embed=embed)
