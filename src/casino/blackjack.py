@@ -26,12 +26,17 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
 
     if dealer_total > 21 or player_total > dealer_total:
         await give_coins(session.user_id, session.bet * 2)
-        return f"🎉 You win! (+{session.bet} coins)"
+        result = f"🎉 You win! (+{session.bet} coins)"
+        public_msg = f"🃏 **{interaction.user.mention}** won a Blackjack game and earned `{session.bet}` coins!"
     elif dealer_total == player_total:
         await give_coins(session.user_id, session.bet)
-        return f"⚖️ Tie! Your bet was returned."
+        result = f"⚖️ Tie! Your bet was returned."
+        public_msg = f"🃏 **{interaction.user.mention}** tied in Blackjack. No coins lost!"
     else:
-        return f"😢 Dealer wins. You lost your bet."
+        result = f"😢 Dealer wins. You lost your bet."
+        public_msg = f"🃏 **{interaction.user.mention}** lost a Blackjack game."
+    
+    return result, public_msg
     
 class BlackjackView(ui.View):
     def __init__(self, session: BlackjackSession):
@@ -59,6 +64,7 @@ class BlackjackView(ui.View):
             self.session.finished = True
             active_sessions.pop(self.session.user_id, None)
             await interaction.response.edit_message(embed=render_blackjack_embed(self.session, "💥 Bust! You lose."), view=None)
+            await interaction.followup.send(f"🃏 **{interaction.user.mention}** lost a Blackjack game.", ephemeral=False)
         else:
             await interaction.response.edit_message(embed=render_blackjack_embed(self.session), view=self)
 
@@ -72,8 +78,9 @@ class BlackjackView(ui.View):
 
         self.session.finished = True
         active_sessions.pop(self.session.user_id, None)
-        result = await resolve_blackjack(interaction, self.session)
+        result, public_msg = await resolve_blackjack(interaction, self.session)
         await interaction.response.edit_message(embed=render_blackjack_embed(self.session, result), view=None)
+        await interaction.followup.send(public_msg, ephemeral=False)
 
 async def start_blackjack(interaction: Interaction):
     user_id = interaction.user.id

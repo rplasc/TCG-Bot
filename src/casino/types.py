@@ -8,3 +8,9 @@ class BlackjackSession:
     player_hand: list = field(default_factory=lambda: [draw_card(), draw_card()])
     dealer_hand: list = field(default_factory=lambda: [draw_card()])
     finished: bool = False
+
+@dataclass
+class SlotSession:
+    user_id: int
+    wager: int = 5
+    spins: int = 0

@@ -158,5 +158,10 @@ async def handle_card_purchase(interaction: Interaction, card_id: int):
 
     await deduct_coins(user_id, price)
     await add_to_user_collection(user_id, card_id)
+    rarity = card[2].lower()
+    xp_reward = RARITY_XP.get(rarity, 0)
+
+    new_level, coins_awarded = await update_xp_and_check_level(user_id, xp_reward)
 
     await interaction.response.send_message(f"✅ Purchased **{card[1]}** for {price} coins!", ephemeral=True)
+    return card, xp_reward, new_level, coins_awarded

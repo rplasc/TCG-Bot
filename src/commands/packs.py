@@ -1,60 +1,20 @@
-from discord import Embed, Interaction, Color, Object, ui, ButtonStyle
+from discord import Embed, Interaction, Color, Object
 from src.aclient import client
-from src.shop.logic import (handle_card_purchase, CARD_SHOP_PRICES, RARITY_EMOJIS,
-                             draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
-from src.shop.views import ShopView
+from src.shop.logic import (RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
+from src.shop.views import ShopTypeView
 from src.db.db import (register_user, update_daily_claim, get_last_daily_claim, add_to_user_collection, user_owns_card,
-                        give_coins, update_xp_and_check_level, get_daily_shop_cards, format_duration,
-                          get_seconds_until_next_rotation)
+                        give_coins, update_xp_and_check_level)
 from src.utils.time import get_time_until_next_daily
 
 GUILD = Object(id=955464847028531280)
 
-@client.tree.command(name="pack_shop", description="View and purchase card packs", guild=GUILD)
-async def pack_shop(interaction: Interaction):
-    await interaction.response.send_message("🛍️ Welcome to the Card Pack Shop! Choose a pack below:", view=ShopView(interaction.user.id), ephemeral=True)
-
-@client.tree.command(name="shop_cards", description="View today's cards for sale", guild=GUILD)
-async def shop_cards(interaction: Interaction):
-    cards = await get_daily_shop_cards()
-    if not cards:
-        await interaction.response.send_message("🛍️ No cards available today!", ephemeral=True)
-        return
-
-    rotation_in = format_duration(get_seconds_until_next_rotation())
-
-    embed = Embed(
-        title="🛒 Daily Card Shop",
-        description=f"Available for purchase today only!\n⏳ Next rotation in: **{rotation_in}**",
-        color=Color.orange()
+@client.tree.command(name="shop", description="View all available shops", guild=GUILD)
+async def shop(interaction: Interaction):
+    await interaction.response.send_message(
+        "🛍️ Choose the type of shop you'd like to visit:",
+        view=ShopTypeView(interaction.user.id),
+        ephemeral=True
     )
-    view = ui.View()
-
-    for card in cards:
-        rarity = card[2].lower()
-        price = CARD_SHOP_PRICES.get(rarity, 50)
-        emoji = RARITY_EMOJIS.get(rarity, "")
-        button = ui.Button(
-            label=f"Buy {card[1]} ({rarity.title()}) - {price} coins",
-            style=ButtonStyle.green,
-            custom_id=f"buycard_{card[0]}"
-        )
-        view.add_item(button)
-
-        embed.add_field(
-            name=f"{emoji} {card[1]} [{card[2]}]",
-            value=f"ATK: {card[3]} | DEF: {card[4]} | HP: {card[5]}",
-            inline=False
-        )
-
-    async def button_callback(interaction: Interaction):
-        card_id = int(interaction.data['custom_id'].split("_")[1])
-        await handle_card_purchase(interaction, card_id)
-
-    for item in view.children:
-        item.callback = button_callback
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @client.tree.command(name="daily", description="Claim your daily free pack", guild=GUILD)
 async def daily(interaction: Interaction):
