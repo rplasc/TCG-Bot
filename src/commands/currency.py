@@ -8,4 +8,4 @@ GUILD = Object(id=955464847028531280)
 async def balance(interaction: Interaction):
     await register_user(interaction.user.id, interaction.user.name)
     coins = await get_balance(interaction.user.id)
-    await interaction.response.send_message(f"💰 You have **{coins}** coins.")
+    await interaction.response.send_message(f"💰 You have **{coins}** coins.", ephemeral=True)
