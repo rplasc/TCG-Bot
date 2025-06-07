@@ -28,7 +28,7 @@ class CardPageView(ui.View):
         self.clear_items()
         current_card = self.cards[self.index]
         self.add_item(ViewCardButton(card_id=current_card[0], label=f"View {current_card[1]}"))
-        self.add_item(SellCardButton(card_id=current_card[0], rarity=current_card[2]))
+        self.add_item(SellCardButton(card_id=current_card[0], rarity=current_card[2], parent_view=self))
 
         if self.index > 0:
             self.add_item(PreviousPageButton(self))
@@ -64,17 +64,17 @@ class ViewCardButton(ui.Button):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class SellCardButton(ui.Button):
-    def __init__(self, card_id, rarity):
+    def __init__(self, card_id, rarity, parent_view=None):
         label = f"Sell ({SELL_VALUES.get(rarity.lower(), 5)} coins)"
         super().__init__(label=label, style=ButtonStyle.red, custom_id=f"sellcard_{card_id}")
         self.card_id = card_id
         self.rarity = rarity.lower()
+        self.parent_view = parent_view
 
     async def callback(self, interaction: Interaction):
         # Confirm the user still owns the card
         owned_cards = await get_user_collection(interaction.user.id)
         owned_card_ids = {card[0] for card in owned_cards}
-
         if self.card_id not in owned_card_ids:
             await interaction.response.send_message("❌ You no longer own this card.", ephemeral=True)
             return
@@ -82,8 +82,10 @@ class SellCardButton(ui.Button):
         await remove_from_user_collection(interaction.user.id, self.card_id)
         coins = SELL_VALUES.get(self.rarity, 5)
         await give_coins(interaction.user.id, coins)
-        await interaction.response.send_message(f"💰 You sold the card for {coins} coins!", ephemeral=True)
-
+        self.disabled = True
+        self.label = "Sold ✅"
+        await interaction.response.edit_message(view=self.parent_view)
+        await interaction.followup.send(f"💰 You sold the card for {coins} coins!", ephemeral=True)
 
 class PreviousPageButton(ui.Button):
     def __init__(self, parent_view):
