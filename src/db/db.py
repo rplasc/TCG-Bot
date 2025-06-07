@@ -48,17 +48,10 @@ async def register_user(user_id, name):
 # Add card to user collection
 async def add_to_user_collection(user_id, card_id):
     async with aiosqlite.connect(DB_PATH) as db:
-        # Try to update quantity
-        result = await db.execute(
-            "UPDATE user_cards SET quantity = quantity + 1 WHERE user_id = ? AND card_id = ?",
-            (user_id, card_id)
-        )
-        if result.rowcount == 0:
-            # If no row updated, insert new
-            await db.execute(
-                "INSERT INTO user_cards (user_id, card_id, quantity) VALUES (?, ?, 1)",
-                (user_id, card_id)
-            )
+        await db.execute("""
+            INSERT OR IGNORE INTO user_cards (user_id, card_id)
+            VALUES (?, ?)
+        """, (user_id, card_id))
         await db.commit()
 
 # Pull a user's collection
@@ -380,3 +373,15 @@ def format_duration(seconds: int) -> str:
     hours = seconds // 3600
     minutes = (seconds % 3600) // 60
     return f"{hours}h {minutes}m"
+
+async def remove_from_user_collection(user_id: int, card_id: int):
+    async with aiosqlite.connect("data/cards.db") as db:
+        await db.execute("""
+            DELETE FROM user_cards
+            WHERE rowid = (
+                SELECT rowid FROM user_cards
+                WHERE user_id = ? AND card_id = ?
+                LIMIT 1
+            )
+        """, (user_id, card_id))
+        await db.commit()
