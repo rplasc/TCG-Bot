@@ -26,7 +26,7 @@ async def init_db():
         await db.commit()
 
 def calculate_level(xp: int) -> int:
-    return int((xp / 100) ** 0.5) # quadratic scale for levels
+    return int((xp / 150) ** 0.4) # quadratic scale for levels
 
 # In-memory cache
 _daily_shop_cache = {

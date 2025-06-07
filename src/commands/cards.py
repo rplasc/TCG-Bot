@@ -18,7 +18,7 @@ async def add_card_command(
     attack: int,
     defense: int,
     hp: int,
-    image: Attachment,
+    image: str,
     collection: str = None
 ):
     try:
@@ -27,7 +27,13 @@ async def add_card_command(
                 f"❌ Invalid rarity. Must be one of: {', '.join(RARITIES)}"
             )
             return
-        await add_card(name, rarity.lower(), attack, defense, hp, image.url, collection_name=collection)
+        
+        if not image.startswith("http"):
+            await interaction.response.send_message("❌ Image must be a valid URL starting with http/https.", ephemeral=True)
+            return
+
+        await add_card(name, rarity.lower(), attack, defense, hp, image, collection_name=collection)
+
         await interaction.response.send_message(f"Card '{name}' added to collection '{collection or 'Default Collection'}'.")
     except ValueError as e:
         await interaction.response.send_message(str(e))
@@ -64,7 +70,7 @@ async def view_card_command(interaction: Interaction, name: str):
         embed.add_field(name="HP", value=card[5])
 
         image_url = card[6]
-        if image_url and image_url.startswith("http"):
+        if isinstance(image_url, str) and image_url.startswith("http"):
             embed.set_image(url=image_url)
 
         await interaction.response.send_message(embed=embed)
@@ -106,7 +112,7 @@ async def edit_card_command(
         embed.add_field(name="HP", value=card[5])
 
         image_url = card[6]
-        if image_url and image_url.startswith("http"):
+        if isinstance(image_url, str) and image_url.startswith("http"):
             embed.set_image(url=image_url)
 
         await interaction.response.send_message(content=f"✅ Card '{name}' updated.", embed=embed)
