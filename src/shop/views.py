@@ -1,6 +1,7 @@
 from discord import ui, SelectOption, Interaction, ButtonStyle, Embed, Color
 from .logic import SHOP_PACKS, handle_shop_purchase, handle_card_purchase, CARD_SHOP_PRICES, RARITY_EMOJIS
-from src.db.db import get_daily_shop_cards, format_duration, get_seconds_until_next_rotation
+from src.db.db import get_daily_shop_cards
+from src.utils.time import format_duration, get_seconds_until_next_rotation
 
 class ShopView(ui.View):
     def __init__(self, user_id: int):
