@@ -3,6 +3,7 @@ import datetime
 import zoneinfo
 import random
 import aiosqlite
+from typing import Tuple
 from src.models.cards import CARD_TABLE
 from src.models.users import USER_TABLE, USER_CARDS_TABLE
 from src.models.collections import COLLECTIONS_TABLE
@@ -12,7 +13,7 @@ from src.models.shop import DAILY_SHOP_TABLE
 
 from src.utils.ranks import calculate_user_rank
 from src.utils.levels import calculate_level
-from src.utils.time import get_shop_rotation_key
+from src.utils.time import get_shop_rotation_key, get_current_date_str,is_consecutive_day, is_same_day, get_streak_bonus
 
 DB_PATH = "data/cards.db"
 
@@ -423,3 +424,111 @@ async def add_win(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET wins = wins + 1 WHERE id = ?", (user_id,))
         await db.commit()
+
+async def get_user_streak_info(user_id: int) -> dict:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT last_claimed, current_streak, streak_updated
+            FROM daily_cooldowns 
+            WHERE user_id = ?
+        """, (user_id,))
+        row = await cursor.fetchone()
+        
+        if not row:
+            return {
+                'last_claimed': None,
+                'current_streak': 0,
+                'streak_updated': None
+            }
+        
+        return {
+            'last_claimed': row[0],
+            'current_streak': row[1] or 0,
+            'streak_updated': row[3]
+        }
+
+async def can_claim_daily_reward(user_id: int) -> Tuple[bool, dict]:
+    streak_info = await get_user_streak_info(user_id)
+    current_date = get_current_date_str()
+    
+    if not streak_info['last_claimed']:
+        return True, streak_info
+    
+    last_claimed_date = streak_info['last_claimed'][:10]
+    
+    if is_same_day(last_claimed_date, current_date):
+        return False, streak_info
+    
+    return True, streak_info
+
+async def claim_daily_reward_with_streak(user_id: int) -> dict:
+    can_claim, streak_info = await can_claim_daily_reward(user_id)
+    
+    if not can_claim:
+        return {
+            'success': False,
+            'message': 'Daily reward already claimed today',
+            'streak_info': streak_info
+        }
+    
+    current_date = get_current_date_str()
+    current_datetime = datetime.datetime.now().isoformat()
+    
+    new_streak = 1
+    if streak_info['last_claimed']:
+        last_claimed_date = streak_info['last_claimed'][:10]
+        
+        if is_consecutive_day(last_claimed_date, current_date):
+            new_streak = streak_info['current_streak'] + 1
+    
+    new_longest = max(streak_info['longest_streak'], new_streak)
+    
+    # Calculate rewards
+    base_coins = 15
+    bonus_coins = get_streak_bonus(new_streak)
+    total_coins = base_coins + bonus_coins
+    
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("BEGIN")
+            
+            await db.execute("""
+                INSERT OR REPLACE INTO daily_cooldowns 
+                (user_id, last_claimed, current_streak, streak_updated)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, current_datetime, new_streak, current_datetime))
+            
+            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (total_coins, user_id))            
+            await db.commit()
+            
+            return {
+                'success': True,
+                'base_coins': base_coins,
+                'bonus_coins': bonus_coins,
+                'total_coins': total_coins,
+                'current_streak': new_streak,
+                'streak_broken': new_streak == 1 and streak_info['current_streak'] > 1,
+            }
+            
+        except Exception as e:
+            await db.execute("ROLLBACK")
+            raise e
+
+async def update_xp_and_check_level_in_transaction(db, user_id: int, xp_gain: int):
+    cursor = await db.execute("SELECT xp, level FROM users WHERE id = ?", (user_id,))
+    row = await cursor.fetchone()
+    
+    if not row:
+        return None
+    
+    old_xp, old_level = row
+    new_xp = old_xp + xp_gain
+    new_level = calculate_level(new_xp)
+    await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", (new_xp, new_level, user_id))
+    
+    if new_level > old_level:
+        coins_gained = (new_level - old_level) * 5
+        await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (coins_gained, user_id))
+        return {'new_level': new_level, 'coins_gained': coins_gained}
+    
+    return None
