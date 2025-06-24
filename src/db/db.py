@@ -9,6 +9,10 @@ from src.models.daily import DAILY_TABLE
 from src.models.progress import COLLECTION_REWARDS_TABLE
 from src.models.shop import DAILY_SHOP_TABLE
 
+from src.utils.ranks import calculate_user_rank
+from src.utils.levels import calculate_level
+from src.utils.time import get_shop_rotation_key
+
 DB_PATH = "data/cards.db"
 
 # Ensure data directory exists
@@ -24,9 +28,6 @@ async def init_db():
         await db.execute(COLLECTION_REWARDS_TABLE)
         await db.execute(DAILY_SHOP_TABLE)
         await db.commit()
-
-def calculate_level(xp: int) -> int:
-    return int((xp / 150) ** 0.4) # quadratic scale for levels
 
 # In-memory cache
 _daily_shop_cache = {
@@ -183,7 +184,7 @@ async def get_last_daily_claim(user_id: int):
         return row[0] if row else None
 
 async def update_daily_claim(user_id: int):
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.timezone.pst).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR REPLACE INTO daily_cooldowns (user_id, last_claimed) VALUES (?, ?)", (user_id, now))
         await db.commit()
@@ -221,6 +222,14 @@ async def get_top_users_by_xp(limit=10):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             "SELECT name, xp FROM users ORDER BY xp DESC LIMIT ?",
+            (limit,)
+        )
+        return await cursor.fetchall()
+    
+async def get_top_users_by_rank(limit=10):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT name, rank FROM users ORDER BY rank DESC LIMIT ?",
             (limit,)
         )
         return await cursor.fetchall()
@@ -330,17 +339,6 @@ async def refresh_daily_shop(rotation_key: str, num_cards: int = 5):
             await db.execute("INSERT INTO daily_shop (card_id, date) VALUES (?, ?)", (cid, rotation_key))
         await db.commit()
 
-def get_shop_rotation_key():
-    now = datetime.datetime.now(datetime.timezone.utc)
-    rotation_hour = 15  # 3 PM UTC
-
-    if now.hour < rotation_hour:
-        rotation_day = now.date() - datetime.timedelta(days=1)
-    else:
-        rotation_day = now.date()
-
-    return rotation_day.isoformat()
-
 async def get_daily_shop_cards():
     key = get_shop_rotation_key()
 
@@ -362,18 +360,6 @@ async def get_daily_shop_cards():
     _daily_shop_cache["cards"] = cards
     return cards
 
-def get_seconds_until_next_rotation():
-    now = datetime.datetime.now(datetime.timezone.utc)
-    next_rotation = now.replace(hour=15, minute=0, second=0, microsecond=0)
-    if now.hour >= 15:
-        next_rotation += datetime.timedelta(days=1)
-    return (next_rotation - now).total_seconds()
-
-def format_duration(seconds: int) -> str:
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
-    return f"{hours}h {minutes}m"
-
 async def remove_from_user_collection(user_id: int, card_id: int):
     async with aiosqlite.connect("data/cards.db") as db:
         await db.execute("""
@@ -385,3 +371,23 @@ async def remove_from_user_collection(user_id: int, card_id: int):
             )
         """, (user_id, card_id))
         await db.commit()
+
+async def update_rp_and_check_rank(user_id: int, rp_gain: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT rp, rank FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return
+
+        old_rp, old_rank = row
+        new_rp = old_rp + rp_gain
+        new_rank, new_rp = calculate_user_rank(old_rank, new_rp)
+
+        await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", (new_rp, new_rank, user_id))
+
+        if new_rank != old_rank:
+            await db.commit()
+            return new_rank
+
+        await db.commit()
+        return None, 0
