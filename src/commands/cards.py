@@ -1,6 +1,6 @@
 from discord import Interaction, Embed, Color, Attachment, ui, ButtonStyle, Object
 from discord.ext import commands
-from src.db.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name
+from src.database.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name
 from src.aclient import client
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView

@@ -1,6 +1,6 @@
 from discord import app_commands, Interaction, Embed, Color, ui, ButtonStyle, Object
 from src.aclient import client
-from src.db.db import get_all_cards, get_user_collection
+from src.database.db import get_all_cards, get_user_collection
 
 GUILD = Object(id=955464847028531280)
 

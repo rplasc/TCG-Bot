@@ -1,5 +1,5 @@
 from discord import ui, Interaction, ButtonStyle, Embed, Color
-from src.db.db import get_card, remove_from_user_collection, get_user_collection, give_coins
+from src.database.db import get_card, remove_from_user_collection, get_user_collection, give_coins
 
 SELL_VALUES = {
     "common": 10,

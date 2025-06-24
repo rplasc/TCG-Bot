@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from discord import ui, Interaction, Embed, Color, ButtonStyle
-from src.db.db import register_user, can_afford, deduct_coins, give_coins
+from src.database.db import register_user, can_afford, deduct_coins, give_coins
 from src.casino.logic import draw_card, hand_total
 from src.casino.types import BlackjackSession
 

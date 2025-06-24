@@ -1,5 +1,5 @@
 from discord import ui, Interaction, Embed, ButtonStyle, SelectOption, Color, TextStyle
-from src.db.db import (
+from src.database.db import (
     remove_from_user_collection, add_to_user_collection,
     can_afford, deduct_coins, give_coins, get_card
 )

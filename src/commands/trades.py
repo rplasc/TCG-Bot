@@ -1,6 +1,6 @@
 from discord import Interaction, Member, Object
 from src.aclient import client
-from src.db.db import get_user_collection
+from src.database.db import get_user_collection
 from src.trades.views import TradeView
 
 GUILD = Object(id=955464847028531280)

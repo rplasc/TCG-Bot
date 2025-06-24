@@ -1,5 +1,5 @@
 from discord import Interaction, Object
-from src.db.db import register_user, get_balance
+from src.database.db import register_user, get_balance
 from src.aclient import client
 
 GUILD = Object(id=955464847028531280)

@@ -4,7 +4,8 @@ from collections import defaultdict
 import discord
 from src.aclient import client
 from src.commands import cards, general, packs, collection, codex, currency, xp, level, casino, trades
-from src.db.db import give_coins, register_user, init_db
+from src.database.db import give_coins, register_user, init_db
+from src.combat.session_manager import session_manager
 
 # Track last rewarded message timestamp
 message_cooldowns = defaultdict(lambda: 0)
@@ -26,6 +27,12 @@ async def on_ready():
     print("Registered Commands:")
     for command in commands:
         print(f"- {command.name}")
+    
+    session_manager.start_cleanup_task()
+
+@client.event
+async def on_close():
+    await session_manager.shutdown()
 
 # Gives users coins based on messages
 def calculate_message_reward(message: str) -> int:

@@ -1,7 +1,7 @@
 import random
 import asyncio
 from discord import Interaction, Embed, Color, ui, ButtonStyle
-from src.db.db import can_afford, deduct_coins, give_coins, register_user, user_owns_card, add_to_user_collection, get_balance
+from src.database.db import can_afford, deduct_coins, give_coins, register_user, user_owns_card, add_to_user_collection, get_balance
 from src.shop.logic import draw_card
 from src.shop.logic import RARITY_EMOJIS
 from src.casino.types import SlotSession

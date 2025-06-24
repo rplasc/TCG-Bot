@@ -1,7 +1,7 @@
 import random
 import aiosqlite
 from discord import Embed, Color, Interaction
-from src.db.db import (
+from src.database.db import (
     register_user, add_to_user_collection, can_afford, deduct_coins,
     give_coins, user_owns_card, update_xp_and_check_level, get_card
 )

@@ -1,5 +1,6 @@
 import os
 import datetime
+import zoneinfo
 import random
 import aiosqlite
 from src.models.cards import CARD_TABLE
@@ -37,7 +38,7 @@ _daily_shop_cache = {
 
 # For manual reset
 def clear_daily_shop_cache():
-    _daily_shop_cache["date"] = None
+    _daily_shop_cache["key"] = None
     _daily_shop_cache["cards"] = []
 
 # Add user to db
@@ -152,10 +153,14 @@ async def get_all_cards():
         return await cursor.fetchall()
 
 async def get_balance(user_id):
-    async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
-        row = await cursor.fetchone()
-        return row[0] if row else None
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+    except aiosqlite.Error as e:
+        print(f"Database error in get_balance: {e}")
+        return 0
 
 async def set_balance(user_id, amount):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -184,7 +189,7 @@ async def get_last_daily_claim(user_id: int):
         return row[0] if row else None
 
 async def update_daily_claim(user_id: int):
-    now = datetime.datetime.now(datetime.timezone.pst).isoformat()
+    now = datetime.datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles")).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("INSERT OR REPLACE INTO daily_cooldowns (user_id, last_claimed) VALUES (?, ?)", (user_id, now))
         await db.commit()
@@ -197,27 +202,41 @@ async def get_xp(user_id):
 
 async def update_xp_and_check_level(user_id: int, xp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:
-        # Get current XP and level
-        cursor = await db.execute("SELECT xp, level FROM users WHERE id = ?", (user_id,))
-        row = await cursor.fetchone()
-        if not row:
-            return  # user not registered
-
-        old_xp, old_level = row
-        new_xp = old_xp + xp_gain
-        new_level = calculate_level(new_xp)
-
-        await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", (new_xp, new_level, user_id))
-
-        if new_level > old_level:
-            coins_gained = (new_level - old_level) * 5
-            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (coins_gained, user_id))
+        try:
+            # Start transaction
+            await db.execute("BEGIN")
+            
+            # Get current stats
+            cursor = await db.execute("SELECT xp, level FROM users WHERE id = ?", (user_id,))
+            row = await cursor.fetchone()
+            
+            if not row:
+                await db.execute("ROLLBACK")
+                return None, 0
+            
+            old_xp, old_level = row
+            new_xp = old_xp + xp_gain
+            new_level = calculate_level(new_xp)
+            
+            # Update XP and level
+            await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", 
+                            (new_xp, new_level, user_id))
+            
+            # Award coins if leveled up
+            if new_level > old_level:
+                coins_gained = (new_level - old_level) * 5
+                await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", 
+                                (coins_gained, user_id))
+                await db.commit()
+                return new_level, coins_gained
+            
             await db.commit()
-            return new_level, coins_gained  # Level up occurred
-
-        await db.commit()
-        return None, 0  # No level up
-
+            return None, 0
+            
+        except Exception as e:
+            await db.execute("ROLLBACK")
+            raise e
+        
 async def get_top_users_by_xp(limit=10):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
@@ -317,8 +336,10 @@ async def get_missing_cards_in_collection(user_id: int, collection_name: str):
             FROM cards
             JOIN collections ON cards.collection_id = collections.id
             WHERE LOWER(collections.name) = LOWER(?)
-            AND cards.id NOT IN (
-                SELECT card_id FROM user_cards WHERE user_id = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM user_cards 
+                WHERE user_cards.card_id = cards.id 
+                AND user_cards.user_id = ?
             )
         """, (collection_name, user_id))
         rows = await cursor.fetchall()
@@ -361,7 +382,7 @@ async def get_daily_shop_cards():
     return cards
 
 async def remove_from_user_collection(user_id: int, card_id: int):
-    async with aiosqlite.connect("data/cards.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             DELETE FROM user_cards
             WHERE rowid = (
@@ -371,6 +392,12 @@ async def remove_from_user_collection(user_id: int, card_id: int):
             )
         """, (user_id, card_id))
         await db.commit()
+
+async def get_rank_id(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT rank FROM users WHERE id = ?", (user_id))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
 
 async def update_rp_and_check_rank(user_id: int, rp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -383,11 +410,16 @@ async def update_rp_and_check_rank(user_id: int, rp_gain: int):
         new_rp = old_rp + rp_gain
         new_rank, new_rp = calculate_user_rank(old_rank, new_rp)
 
-        await db.execute("UPDATE users SET xp = ?, level = ? WHERE id = ?", (new_rp, new_rank, user_id))
+        await db.execute("UPDATE users SET rp = ?, rank = ? WHERE id = ?", (new_rp, new_rank, user_id))
 
         if new_rank != old_rank:
             await db.commit()
             return new_rank
 
         await db.commit()
-        return None, 0
+        return None
+
+async def add_win(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET wins = wins + 1 WHERE id = ?", (user_id,))
+        await db.commit()

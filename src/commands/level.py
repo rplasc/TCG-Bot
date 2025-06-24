@@ -1,6 +1,6 @@
 from discord import Interaction, Color, Embed, Object
 from src.aclient import client
-from src.db.db import register_user, get_xp, calculate_level
+from src.database.db import register_user, get_xp, calculate_level
 
 GUILD = Object(id=955464847028531280)
 

@@ -2,7 +2,7 @@ from discord import Embed, Interaction, Color, Object
 from src.aclient import client
 from src.shop.logic import (RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
 from src.shop.views import ShopTypeView
-from src.db.db import (register_user, update_daily_claim, get_last_daily_claim, add_to_user_collection, user_owns_card,
+from src.database.db import (register_user, update_daily_claim, get_last_daily_claim, add_to_user_collection, user_owns_card,
                         give_coins, update_xp_and_check_level)
 from src.utils.time import get_time_until_next_daily
 
