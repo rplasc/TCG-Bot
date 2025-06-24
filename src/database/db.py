@@ -249,7 +249,7 @@ async def get_top_users_by_xp(limit=10):
 async def get_top_users_by_rank(limit=10):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT name, rank FROM users ORDER BY rank DESC LIMIT ?",
+            "SELECT name, rank, level FROM users ORDER BY rank DESC LIMIT ?",
             (limit,)
         )
         return await cursor.fetchall()
@@ -444,7 +444,7 @@ async def get_user_streak_info(user_id: int) -> dict:
         return {
             'last_claimed': row[0],
             'current_streak': row[1] or 0,
-            'streak_updated': row[3]
+            'streak_updated': row[2]
         }
 
 async def can_claim_daily_reward(user_id: int) -> Tuple[bool, dict]:
@@ -480,9 +480,7 @@ async def claim_daily_reward_with_streak(user_id: int) -> dict:
         
         if is_consecutive_day(last_claimed_date, current_date):
             new_streak = streak_info['current_streak'] + 1
-    
-    new_longest = max(streak_info['longest_streak'], new_streak)
-    
+        
     # Calculate rewards
     base_coins = 15
     bonus_coins = get_streak_bonus(new_streak)

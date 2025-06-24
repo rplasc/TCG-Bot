@@ -41,11 +41,6 @@ async def daily(interaction: Interaction):
                     value=f"{streak_info['current_streak']} days",
                     inline=True
                 )
-                embed.add_field(
-                    name="🏆 Longest Streak", 
-                    value=f"{streak_info['longest_streak']} days",
-                    inline=True
-                )
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
     try:
