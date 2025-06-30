@@ -28,7 +28,7 @@ class CombatSession:
 
         MODIFIERS = {1: 0, 2: 0.75, 3: 1.0, 4: 1.0, 5: 1.15, 6: 1.5}
         modifier = MODIFIERS[roll]
-        damage = 0 if modifier == 0 else max(1, int(attacker["attack"] * modifier - defender["defense"]))
+        damage = 0 if modifier == 0 else max(1, int(attacker["attack"] * modifier * (1 - min(0.75, defender["defense"] / 80))))
         self.hp[target_id] = max(0, self.hp[target_id] - damage)
 
         self.turn = target_id

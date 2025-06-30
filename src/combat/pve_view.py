@@ -1,9 +1,9 @@
 import random
 from discord import Interaction, Embed, Color, ui, SelectOption, ButtonStyle
 from src.combat.view import CombatView
-from src.combat.pve_session import PVESession, AI_DIFFICULTIES
+from src.combat.pve_session import PVESession, AI_DIFFICULTIES, PVE_XP_REWARD, PVE_COIN_REWARD
 from src.combat.session_manager import session_manager
-from src.database.db import get_card, get_user_collection, get_all_cards
+from src.database.db import get_card, get_user_collection, get_all_cards, give_coins, update_xp_and_check_level
 
 class PVECombatView(CombatView):    
     def __init__(self, session: PVESession, session_manager):
@@ -34,7 +34,7 @@ class PVECombatView(CombatView):
         
         difficulty_info = AI_DIFFICULTIES[self.pve_session.difficulty]
         embed.add_field(
-            name=f"👹 AI ({difficulty_info['name']})",
+            name=f"👹 ({difficulty_info['name']}) Enemy",
             value=(
                 f"**{ai_card['name']}**\n"
                 f"❤️ HP: {self.pve_session.hp[self.pve_session.ai_id]}\n"
@@ -74,6 +74,12 @@ class PVECombatView(CombatView):
         
         # Check if AI is defeated
         if self.pve_session.hp[self.pve_session.ai_id] <= 0:
+            coin_reward = PVE_COIN_REWARD.get(self.pve_session.difficulty.lower(), 0)
+            xp_reward = PVE_XP_REWARD.get(self.pve_session.difficulty.lower(), 0)
+
+            await give_coins(self.pve_session.player_id, coin_reward)
+            new_level, level_coins = await update_xp_and_check_level(self.pve_session.player_id, xp_reward)
+
             embed.title = "🏆 Victory!"
             embed.color = Color.green()
             embed.add_field(
@@ -81,8 +87,22 @@ class PVECombatView(CombatView):
             value=f"You have successfully defeated **{self.pve_session.p2_card['name']}**!\n",
             inline=False
         )
+            embed.add_field(
+                name="Reward",
+                value= f"You have earned {coin_reward} coins and {xp_reward} XP!",
+                inline=False
+            )
+
+            if new_level:
+                embed.add_field(
+                    name="🆙 Level Up!", 
+                    value=f"You reached Level {new_level} and earned +{level_coins} coins!", 
+                    inline=False
+                )
+
             await self.session_manager.end_session(user_id, reason="pve_victory")
             self.disable_all()
+
             await interaction.response.edit_message(embed=embed, view=self)
             return
         
@@ -105,13 +125,13 @@ class PVECombatView(CombatView):
             if self.pve_session.hp[self.pve_session.player_id] <= 0:
                 embed.title = "💀 Defeat"
                 embed.color = Color.red()
-            embed.add_field(
-                name="⚰️ Battle Lost", 
-                value=f"**{self.pve_session.p2_card['name']}** has proven too powerful!\n🔄 Train harder and try again!",
-                inline=False
-            )                
-            await self.session_manager.end_session(user_id, reason="pve_defeat")
-            self.disable_all()
+                embed.add_field(
+                    name="⚰️ Battle Lost", 
+                    value=f"**{self.pve_session.p2_card['name']}** has proven too powerful!\n🔄 Train harder and try again!",
+                    inline=False
+                )                
+                await self.session_manager.end_session(user_id, reason="pve_defeat")
+                self.disable_all()
             
             await interaction.edit_original_response(embed=embed, view=self)
 

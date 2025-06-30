@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 import discord
 from src.aclient import client
-from src.commands import cards, general, packs, collection, codex, currency, xp, level, casino, trades, combat
+from src.commands import cards, general, leaderboard, packs, collection, codex, currency, level, casino, trades, combat
 from src.database.db import give_coins, register_user, init_db
 from src.combat.session_manager import session_manager
 

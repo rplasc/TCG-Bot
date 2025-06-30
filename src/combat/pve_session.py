@@ -24,9 +24,20 @@ AI_DIFFICULTIES = {
     }
 }
 
-class PVESession(CombatSession):
-    """Extended combat session for PVE battles"""
-    
+# Victory Rewards
+PVE_COIN_REWARD = {
+    "easy": 10,
+    "normal": 15,
+    "hard": 25
+}
+
+PVE_XP_REWARD = {
+    "easy": 20,
+    "normal": 35,
+    "hard": 50
+}
+
+class PVESession(CombatSession):    
     def __init__(self, player_id, player_card, ai_card, difficulty="normal"):
         # AI gets a special ID (negative to avoid conflicts)
         ai_id = -1

@@ -28,10 +28,10 @@ RARITY_POOL_BOOSTED = {
 }
 
 RARITY_XP = {
-    "common": 5,
-    "rare": 20,
-    "epic": 35,
-    "legendary": 50
+    "common": 10,
+    "rare": 30,
+    "epic": 70,
+    "legendary": 100
 }
 
 RARITY_EMOJIS = {

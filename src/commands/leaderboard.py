@@ -1,15 +1,9 @@
 from discord import Interaction, Embed, Color, Object
 from src.aclient import client
-from src.database.db import register_user, get_xp, get_top_users_by_rank
+from src.database.db import get_top_users_by_rank
 from src.utils.ranks import get_rank_display_name
 
 GUILD = Object(id=955464847028531280)
-
-@client.tree.command(name="xp", description="Check your total XP", guild=GUILD)
-async def xp(interaction: Interaction):
-    await register_user(interaction.user.id, interaction.user.name)
-    current_xp = await get_xp(interaction.user.id)
-    await interaction.response.send_message(f"⭐ You have {current_xp} XP.")
 
 @client.tree.command(name="leaderboard", description="View the Rank leaderboard", guild=GUILD)
 async def leaderboard(interaction: Interaction):

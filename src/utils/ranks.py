@@ -45,17 +45,25 @@ def calculate_user_rank(rp: int, rank_id: int) -> int:
     new_rp = rp
     rank = rank_id
     rank_table = calculate_rank_table()
+    max_rank_id = max(rank_table.keys())
 
-    while rank < max(rank_table.keys()) and rp >= rank_table[rank]["rp_to_next"]:
+    # Handle rank promotions
+    while rank < max_rank_id and rank_table[rank]["rp_to_next"] > 0 and new_rp >= rank_table[rank]["rp_to_next"]:
         new_rp -= rank_table[rank]["rp_to_next"]
         rank += 1
 
+    # Handle rank demotions
     while new_rp < 0 and rank > 0:
         rank -= 1
         new_rp += rank_table[rank]["rp_to_next"]
 
-    max_rp = rank_table[rank]["rp_to_next"]
-    new_rp = min(max(new_rp, 0), max_rp)
+    # Cap RP within valid range for current rank
+    if rank in rank_table:
+        max_rp = rank_table[rank]["rp_to_next"]
+        if max_rp == 0:
+            new_rp = max(new_rp, 0)
+        else:
+            new_rp = min(max(new_rp, 0), max_rp - 1)
 
     return new_rp, rank
 
@@ -68,7 +76,7 @@ def calculate_match_multiplier(player_rank_id, opponent_rank_id):
 
 def get_rp_change(rank_id: int, win: bool, multiplier: float = 1.0):
     rank_table = calculate_rank_table()
-    rank_info = rank_table(rank_id)
+    rank_info = rank_table.get(rank_id)
     if not rank_info:
         return 25
     

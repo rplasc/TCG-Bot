@@ -3,7 +3,8 @@ from src.aclient import client
 from src.combat.view import CombatView
 from src.combat.pve_view import PVESetupView, AI_DIFFICULTIES
 from src.combat.session_manager import session_manager
-from src.database.db import get_card, get_user_collection
+from src.database.db import get_card, get_user_collection, register_user, get_rank_id
+from src.utils.ranks import get_rank_display_name
 
 GUILD = Object(id=955464847028531280)
 
@@ -185,7 +186,7 @@ async def pve_command(interaction: Interaction):
     
     view = PVESetupView(user_id)
     embed = Embed(
-        title="🤖 PVE Combat Setup",
+        title="PVE Combat Setup",
         description="Choose your difficulty and card to fight the AI!",
         color=Color.blue()
     )
@@ -197,3 +198,17 @@ async def pve_command(interaction: Interaction):
     )
     
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+@client.tree.command(name="rank", description="View your current rank.", guild=GUILD)
+async def rank_command(interaction: Interaction):
+    user_id = interaction.user.id
+    await register_user(user_id, interaction.user.name)
+    rank = await get_rank_id(user_id)
+
+    embed = Embed(
+        title="Current Rank",
+        description=f"Your current rank is {get_rank_display_name(rank)}.",
+        color=Color.gold()
+    )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)

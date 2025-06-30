@@ -396,7 +396,7 @@ async def remove_from_user_collection(user_id: int, card_id: int):
 
 async def get_rank_id(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
-        cursor = await db.execute("SELECT rank FROM users WHERE id = ?", (user_id))
+        cursor = await db.execute("SELECT rank FROM users WHERE id = ?", (user_id,))
         row = await cursor.fetchone()
         return row[0] if row else 0
 
