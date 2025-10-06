@@ -1,4 +1,4 @@
-from discord import Interaction, Embed, Color, Object
+from discord import Interaction, Embed, Color
 from src.aclient import client
 from src.database.db import get_top_users_by_rank
 from src.utils.ranks import get_rank_display_name

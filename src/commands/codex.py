@@ -1,4 +1,4 @@
-from discord import Interaction, Embed, Color, ui, ButtonStyle, Object
+from discord import Interaction, Embed, Color, ui, ButtonStyle
 from src.aclient import client
 from src.database.db import get_all_cards, get_user_collection
 

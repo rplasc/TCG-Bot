@@ -1,4 +1,4 @@
-from discord import Interaction, Embed, Color,Object
+from discord import Interaction, Embed, Color
 from src.database.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name, create_collection, delete_collection_by_name
 from src.aclient import client
 from src.utils.permissions import has_role

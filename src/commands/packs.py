@@ -1,4 +1,4 @@
-from discord import Embed, Interaction, Color, Object
+from discord import Embed, Interaction, Color
 from src.aclient import client
 from src.shop.logic import RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS
 from src.shop.views import ShopTypeView

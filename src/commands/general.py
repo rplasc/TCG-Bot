@@ -1,4 +1,4 @@
-from discord import Interaction, Object, Embed, Color
+from discord import Interaction, Embed, Color
 from src.aclient import client
 from src.database.db import get_card_by_name
 

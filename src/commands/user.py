@@ -1,4 +1,4 @@
-from discord import Interaction, Color, Embed, Object, Member
+from discord import Interaction, Color, Embed, Member
 from src.aclient import client
 from src.database.db import register_user, get_xp, calculate_level, get_rank_id, get_balance, get_wins, get_rp
 from src.utils.ranks import get_rank_display_name
@@ -29,7 +29,6 @@ async def rank_command(interaction: Interaction):
         description=f"Your current rank is {get_rank_display_name(rank)}.",
         color=Color.gold()
     )
-    embed.set_footer(text=f"Current RP:{rp}")
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 

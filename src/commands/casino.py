@@ -1,5 +1,5 @@
 from src.aclient import client
-from discord import Interaction, Object
+from discord import Interaction
 from src.casino.views import CasinoView
 
 @client.tree.command(name="casino", description="Play gambling games")

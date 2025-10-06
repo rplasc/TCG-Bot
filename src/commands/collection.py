@@ -1,4 +1,4 @@
-from discord import Interaction, Embed, Color, Object
+from discord import Interaction, Embed, Color
 from src.aclient import client
 from src.database.db import (get_user_collection, get_cards_by_collection, get_card_ids_in_collection, 
                         get_user_owned_card_ids, get_missing_cards_in_collection,

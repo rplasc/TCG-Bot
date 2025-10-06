@@ -1,4 +1,4 @@
-from discord import app_commands, Interaction, Embed, Object, Color, ui, Member, SelectOption, ButtonStyle
+from discord import app_commands, Interaction, Embed, Color, ui, Member, SelectOption, ButtonStyle
 from src.aclient import client
 from src.combat.view import CombatView
 from src.combat.pve_view import PVESetupView, AI_DIFFICULTIES

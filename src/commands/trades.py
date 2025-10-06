@@ -1,4 +1,4 @@
-from discord import Interaction, Member, Object
+from discord import Interaction, Member
 from src.aclient import client
 from src.database.db import get_user_collection
 from src.trades.views import TradeView
