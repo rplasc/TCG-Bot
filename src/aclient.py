@@ -11,7 +11,7 @@ class aclient(Client):
         super().__init__(intents = intents)
         self.tree = app_commands.CommandTree(self)
         self.current_channel = None
-        self.activity = Activity(type = ActivityType.custom,name='gambling')
+        self.activity = Activity(type = ActivityType.watching,name='the casino')
         self.isPrivate = False       
     
 client = aclient()

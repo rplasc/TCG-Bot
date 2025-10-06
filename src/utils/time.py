@@ -20,7 +20,7 @@ def get_seconds_until_next_rotation():
     now = datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles"))
     next_rotation = now.replace(hour=15, minute=0, second=0, microsecond=0)
     if now.hour >= 15:
-        next_rotation += datetime.timedelta(days=1)
+        next_rotation += timedelta(days=1)
     return (next_rotation - now).total_seconds()
 
 def format_duration(seconds: int) -> str:

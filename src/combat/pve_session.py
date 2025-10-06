@@ -80,16 +80,14 @@ class PVESession(CombatSession):
         return roll, (damage, modifier)
     
     def _smart_ai_roll(self):
-        # Get current HP percentages
         player_hp_pct = self.hp[self.player_id] / self.p1_card["hp"]
         ai_hp_pct = self.hp[self.ai_id] / self.p2_card["hp"]
         
-        # If AI is low on health, try for higher rolls (risky but potentially rewarding)
+        # If AI is low on health, try for higher rolls
         if ai_hp_pct < 0.3:
             return random.choices([1, 2, 3, 4, 5, 6], weights=[5, 10, 15, 20, 25, 25])[0]
         # If player is low on health, play more conservatively
         elif player_hp_pct < 0.3:
             return random.choices([1, 2, 3, 4, 5, 6], weights=[10, 15, 25, 25, 15, 10])[0]
-        # Normal weighted roll favoring mid-range
         else:
             return random.choices([1, 2, 3, 4, 5, 6], weights=[5, 15, 25, 25, 20, 10])[0]

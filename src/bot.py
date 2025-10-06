@@ -3,7 +3,7 @@ import time
 from collections import defaultdict
 import discord
 from src.aclient import client
-from src.commands import cards, general, leaderboard, packs, collection, codex, currency, level, casino, trades, combat
+from src.commands import general, leaderboard, packs, collection, codex, casino, trades, combat, user, admin
 from src.database.db import give_coins, register_user, init_db
 from src.combat.session_manager import session_manager
 
@@ -19,11 +19,10 @@ async def on_ready():
     await client.tree.sync()
     await init_db()
 
-    GUILD = discord.Object(id=955464847028531280)
-    await client.tree.sync(guild=GUILD)
+    await client.tree.sync()
     print(f'Logged in as {client.user.name}')
 
-    commands = await client.tree.fetch_commands(guild=GUILD)
+    commands = await client.tree.fetch_commands()
     print("Registered Commands:")
     for command in commands:
         print(f"- {command.name}")

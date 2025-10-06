@@ -1,8 +1,6 @@
-from discord import app_commands, Interaction, Embed, Color, ui, ButtonStyle, Object
+from discord import Interaction, Embed, Color, ui, ButtonStyle, Object
 from src.aclient import client
 from src.database.db import get_all_cards, get_user_collection
-
-GUILD = Object(id=955464847028531280)
 
 CARDS_PER_PAGE = 10
 
@@ -56,8 +54,7 @@ class CodexView(ui.View):
         self.update_buttons()
         await interaction.response.edit_message(embed=self.get_embed(), view=self)
 
-
-@client.tree.command(name="codex", description="View all cards in the game", guild=GUILD)
+@client.tree.command(name="codex", description="View all cards in the game")
 async def codex(interaction: Interaction):
     cards = await get_all_cards()
     user_cards = await get_user_collection(interaction.user.id)

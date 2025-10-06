@@ -3,9 +3,7 @@ from src.aclient import client
 from src.database.db import get_top_users_by_rank
 from src.utils.ranks import get_rank_display_name
 
-GUILD = Object(id=955464847028531280)
-
-@client.tree.command(name="leaderboard", description="View the Rank leaderboard", guild=GUILD)
+@client.tree.command(name="leaderboard", description="View the Rank leaderboard")
 async def leaderboard(interaction: Interaction):
     top_users = await get_top_users_by_rank(10)
 

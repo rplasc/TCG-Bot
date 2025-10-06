@@ -1,7 +1,6 @@
 import random
 from discord import ui, Interaction, Embed, ButtonStyle, Color
 from src.combat.session import CombatSession
-from src.combat.session_manager import session_manager
 from src.database.db import give_coins, get_rank_id, update_rp_and_check_rank, add_win
 from src.utils.ranks import calculate_match_multiplier, get_rp_change
 
@@ -102,6 +101,10 @@ class CombatView(ui.View):
                 name="👊 Battle Complete",
                 value=f"<@{winner}> has won the fight and 10 coins!",
                 inline=False
+            )
+            embed.add_field(
+                name="RP Change",
+                value=f"<@{winner}> has gained {rp_gain} points.\n<@{loser}> has lost {rp_loss} points."
             )
 
             if new_rank_winner:

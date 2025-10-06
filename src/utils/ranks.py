@@ -41,7 +41,7 @@ def get_rank_display_name(rank_id):
 
     return f"{tier} {division}" if division else tier
 
-def calculate_user_rank(rp: int, rank_id: int) -> int:
+def calculate_user_rank(rp: int, rank_id: int) -> tuple[int, int]:
     new_rp = rp
     rank = rank_id
     rank_table = calculate_rank_table()
@@ -98,4 +98,3 @@ def get_rp_change(rank_id: int, win: bool, multiplier: float = 1.0):
         return -int(rp * 0.9)
     else:
         return int(rp * multiplier)
-    

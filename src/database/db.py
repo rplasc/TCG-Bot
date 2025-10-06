@@ -399,6 +399,14 @@ async def get_rank_id(user_id):
         cursor = await db.execute("SELECT rank FROM users WHERE id = ?", (user_id,))
         row = await cursor.fetchone()
         return row[0] if row else 0
+    
+async def get_rp(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT rp, rank FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return
+        return row[0] if row else 0
 
 async def update_rp_and_check_rank(user_id: int, rp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:
@@ -409,7 +417,7 @@ async def update_rp_and_check_rank(user_id: int, rp_gain: int):
 
         old_rp, old_rank = row
         new_rp = old_rp + rp_gain
-        new_rank, new_rp = calculate_user_rank(old_rank, new_rp)
+        new_rp, new_rank = calculate_user_rank(new_rp, old_rank)
 
         await db.execute("UPDATE users SET rp = ?, rank = ? WHERE id = ?", (new_rp, new_rank, user_id))
 
@@ -424,6 +432,12 @@ async def add_win(user_id):
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("UPDATE users SET wins = wins + 1 WHERE id = ?", (user_id,))
         await db.commit()
+
+async def get_wins(user_id):
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT wins FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
 
 async def get_user_streak_info(user_id: int) -> dict:
     async with aiosqlite.connect(DB_PATH) as db:

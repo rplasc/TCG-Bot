@@ -1,15 +1,12 @@
-from discord import Interaction, Embed, Color, Attachment, ui, ButtonStyle, Object
-from discord.ext import commands
-from src.database.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name
+from discord import Interaction, Embed, Color,Object
+from src.database.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name, create_collection, delete_collection_by_name
 from src.aclient import client
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView
 
-GUILD = Object(id=955464847028531280)
-
 RARITIES = ["common", "uncommon", "rare", "epic", "legendary"]
 
-@client.tree.command(name="add_card", description="Add card to database", guild=GUILD)
+@client.tree.command(name="add_card", description="Add card to database")
 @has_role("ChopperDevTeam")
 async def add_card_command(
     interaction: Interaction,
@@ -38,7 +35,7 @@ async def add_card_command(
     except ValueError as e:
         await interaction.response.send_message(str(e))
 
-@client.tree.command(name="delete_card", description="Delete a card by name with confirmation", guild=GUILD)
+@client.tree.command(name="delete_card", description="Delete a card by name with confirmation")
 @has_role("ChopperDevTeam")
 async def delete_card_command(interaction: Interaction, name: str):
     embed = Embed(
@@ -59,25 +56,7 @@ async def delete_card_command(interaction: Interaction, name: str):
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-@client.tree.command(name="view_card", description="View a card by name", guild=GUILD)
-async def view_card_command(interaction: Interaction, name: str):
-    card = await get_card_by_name(name)
-    if card:
-        embed = Embed(title=f"{card[1]} (#{card[0]})", color=Color.blue())
-        embed.add_field(name="Rarity", value=card[2])
-        embed.add_field(name="Attack", value=card[3])
-        embed.add_field(name="Defense", value=card[4])
-        embed.add_field(name="HP", value=card[5])
-
-        image_url = card[6]
-        if isinstance(image_url, str) and image_url.startswith("http"):
-            embed.set_image(url=image_url)
-
-        await interaction.response.send_message(embed=embed)
-    else:
-        await interaction.response.send_message("Card not found.")
-
-@client.tree.command(name="edit_card", description="Edit an existing card", guild=GUILD)
+@client.tree.command(name="edit_card", description="Edit an existing card")
 @has_role("ChopperDevTeam")
 async def edit_card_command(
     interaction: Interaction,
@@ -119,3 +98,30 @@ async def edit_card_command(
 
     except ValueError as e:
         await interaction.response.send_message(f"❌ {str(e)}", ephemeral=True)
+
+@client.tree.command(name="create_collection", description="Create a new card collection")
+@has_role("ChopperDevTeam")
+async def createcollection(interaction: Interaction, name: str):
+    await create_collection(name)
+    await interaction.response.send_message(f"✅ Collection '{name}' created.")
+
+@client.tree.command(name="delete_collection", description="Delete a collection by name")
+@has_role("ChopperDevTeam")
+async def delete_collection_command(interaction: Interaction, name: str):
+    embed = Embed(
+        title="⚠️ Confirm Collection Deletion",
+        description=f"Are you sure you want to delete the collection `{name}`?",
+        color=Color.red()
+    )
+
+    async def perform_deletion(_: Interaction):
+        return await delete_collection_by_name(name)
+
+    view = ConfirmActionView(
+        user_id=interaction.user.id,
+        action_fn=perform_deletion,
+        success_message=f"✅ Collection '{name}' has been deleted.",
+        failure_message=f"❌ Collection '{name}' was not found or couldn't be deleted.",
+    )
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

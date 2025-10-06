@@ -1,16 +1,12 @@
 from discord import Interaction, Embed, Color, Object
 from src.aclient import client
-from src.database.db import (get_user_collection, create_collection, get_cards_by_collection, delete_collection_by_name,
-                        get_card_ids_in_collection, get_user_owned_card_ids, get_missing_cards_in_collection,
+from src.database.db import (get_user_collection, get_cards_by_collection, get_card_ids_in_collection, 
+                        get_user_owned_card_ids, get_missing_cards_in_collection,
                         get_collection_id, has_claimed_collection_reward, claim_collection_reward, give_coins,
                         update_xp_and_check_level)
-from src.utils.permissions import has_role
-from src.utils.confirmation import ConfirmActionView
 from src.collections.views import CardPageView, build_single_card_embed
 
-GUILD = Object(id=955464847028531280)
-
-@client.tree.command(name="my_collection", description="View your card collection", guild=GUILD)
+@client.tree.command(name="my_collection", description="View your card collection")
 async def my_collection(interaction: Interaction):
     cards = await get_user_collection(interaction.user.id)
     if not cards:
@@ -22,13 +18,7 @@ async def my_collection(interaction: Interaction):
     view = CardPageView(interaction.user.id, cards, index)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-@client.tree.command(name="create_collection", description="Create a new card collection", guild=GUILD)
-@has_role("ChopperDevTeam")
-async def createcollection(interaction: Interaction, name: str):
-    await create_collection(name)
-    await interaction.response.send_message(f"✅ Collection '{name}' created.")
-
-@client.tree.command(name="view_collection", description="View all cards in a specific collection", guild=GUILD)
+@client.tree.command(name="view_collection", description="View all cards in a specific collection")
 async def view_collection(interaction: Interaction, name: str):
     cards = await get_cards_by_collection(name)
     if not cards:
@@ -44,28 +34,7 @@ async def view_collection(interaction: Interaction, name: str):
         )
     await interaction.response.send_message(embed=embed)
 
-@client.tree.command(name="delete_collection", description="Delete a collection by name", guild=GUILD)
-@has_role("ChopperDevTeam")
-async def delete_collection_command(interaction: Interaction, name: str):
-    embed = Embed(
-        title="⚠️ Confirm Collection Deletion",
-        description=f"Are you sure you want to delete the collection `{name}`?",
-        color=Color.red()
-    )
-
-    async def perform_deletion(_: Interaction):
-        return await delete_collection_by_name(name)
-
-    view = ConfirmActionView(
-        user_id=interaction.user.id,
-        action_fn=perform_deletion,
-        success_message=f"✅ Collection '{name}' has been deleted.",
-        failure_message=f"❌ Collection '{name}' was not found or couldn't be deleted.",
-    )
-
-    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-
-@client.tree.command(name="collection_progress", description="See your progress for a specific collection", guild=GUILD)
+@client.tree.command(name="collection_progress", description="See your progress for a specific collection")
 async def collection_progress(interaction: Interaction, collection: str):
     user_id = interaction.user.id
     username = interaction.user.name
@@ -108,7 +77,7 @@ async def collection_progress(interaction: Interaction, collection: str):
     embed.add_field(name="Progress", value=progress_bar, inline=False)
     await interaction.response.send_message(embed=embed)
 
-@client.tree.command(name="my_missing_cards", description="View uncollected cards from a collection", guild=GUILD)
+@client.tree.command(name="my_missing_cards", description="View uncollected cards from a collection")
 async def my_missing_cards(interaction: Interaction, collection: str):
     user_id = interaction.user.id
     missing = await get_missing_cards_in_collection(user_id, collection)

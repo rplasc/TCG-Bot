@@ -1,15 +1,13 @@
 from discord import Embed, Interaction, Color, Object
 from src.aclient import client
-from src.shop.logic import (RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS)
+from src.shop.logic import RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS
 from src.shop.views import ShopTypeView
-from src.database.db import (register_user, update_daily_claim, get_last_daily_claim, add_to_user_collection, user_owns_card,
-                        give_coins, update_xp_and_check_level, can_claim_daily_reward, claim_daily_reward_with_streak,
-                        get_user_streak_info)
+from src.database.db import (register_user,add_to_user_collection, user_owns_card, give_coins, 
+                             update_xp_and_check_level, can_claim_daily_reward, claim_daily_reward_with_streak
+                             )
 from src.utils.time import get_time_until_next_daily
 
-GUILD = Object(id=955464847028531280)
-
-@client.tree.command(name="shop", description="View all available shops", guild=GUILD)
+@client.tree.command(name="shop", description="View all available shops")
 async def shop(interaction: Interaction):
     await interaction.response.send_message(
         "🛍️ Choose the type of shop you'd like to visit:",
@@ -17,7 +15,7 @@ async def shop(interaction: Interaction):
         ephemeral=True
     )
 
-@client.tree.command(name="daily", description="Claim your daily free pack", guild=GUILD)
+@client.tree.command(name="daily", description="Claim your daily free pack")
 async def daily(interaction: Interaction):
     user_id = interaction.user.id
     username = interaction.user.name

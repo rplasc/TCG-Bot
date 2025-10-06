@@ -3,9 +3,7 @@ from src.aclient import client
 from src.database.db import get_user_collection
 from src.trades.views import TradeView
 
-GUILD = Object(id=955464847028531280)
-
-@client.tree.command(name="trade", description="Trade a card with another player", guild=GUILD)
+@client.tree.command(name="trade", description="Trade a card with another player")
 async def trade(interaction: Interaction, target: Member):
     if interaction.user.id == target.id:
         await interaction.response.send_message("❌ You can't trade with yourself.", ephemeral=True)
