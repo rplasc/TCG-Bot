@@ -70,7 +70,7 @@ def calculate_user_rank(rp: int, rank_id: int) -> tuple[int, int]:
 def calculate_match_multiplier(player_rank_id, opponent_rank_id):
     rank_diff = opponent_rank_id - player_rank_id
     multplier = 1.0 + (rank_diff * 0.05)
-    multplier = max(0.8, 1.5)
+    multiplier = max(0.8, min(1.5, multiplier))
 
     return round(multplier, 2)
 
