@@ -19,7 +19,6 @@ async def on_ready():
     await client.tree.sync()
     await init_db()
 
-    await client.tree.sync()
     print(f'Logged in as {client.user.name}')
 
     commands = await client.tree.fetch_commands()

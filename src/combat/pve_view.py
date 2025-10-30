@@ -5,12 +5,21 @@ from src.combat.pve_session import PVESession, AI_DIFFICULTIES, PVE_XP_REWARD, P
 from src.combat.session_manager import session_manager
 from src.database.db import get_card, get_user_collection, get_all_cards, give_coins, update_xp_and_check_level
 
-class PVECombatView(CombatView):    
+
+def create_hp_bar(current: int, maximum: int, length: int = 10) -> str:
+    filled = int((current / maximum) * length) if maximum > 0 else 0
+    filled = max(0, min(length, filled))  # Clamp between 0 and length
+    return f"[{'█' * filled}{'░' * (length - filled)}] {current}/{maximum}"
+
+class PVECombatView(CombatView):
+    
     def __init__(self, session: PVESession, session_manager):
         super().__init__(session, session_manager)
         self.pve_session = session
+        # Shorter timeout for PVE (30 minutes)
+        self.timeout = 1800
     
-    def build_embed(self):
+    def build_embed(self) -> Embed:
         embed = Embed(title="⚔️ PVE Combat", color=Color.blurple())
         
         if self.pve_session.is_ai_turn():
@@ -21,11 +30,14 @@ class PVECombatView(CombatView):
         player_card = self.pve_session.p1_card
         ai_card = self.pve_session.p2_card
         
+        player_hp = self.pve_session.hp[self.pve_session.player_id]
+        ai_hp = self.pve_session.hp[self.pve_session.ai_id]
+        
         embed.add_field(
             name="👤 You",
             value=(
                 f"**{player_card['name']}**\n"
-                f"❤️ HP: {self.pve_session.hp[self.pve_session.player_id]}\n"
+                f"❤️ {create_hp_bar(player_hp, player_card['hp'])}\n"
                 f"🗡️ ATK: {player_card['attack']}\n"
                 f"🛡️ DEF: {player_card['defense']}"
             ),
@@ -37,7 +49,7 @@ class PVECombatView(CombatView):
             name=f"👹 ({difficulty_info['name']}) Enemy",
             value=(
                 f"**{ai_card['name']}**\n"
-                f"❤️ HP: {self.pve_session.hp[self.pve_session.ai_id]}\n"
+                f"❤️ {create_hp_bar(ai_hp, ai_card['hp'])}\n"
                 f"🗡️ ATK: {ai_card['attack']}\n"
                 f"🛡️ DEF: {ai_card['defense']}"
             ),
@@ -55,6 +67,11 @@ class PVECombatView(CombatView):
             await interaction.response.send_message("❌ This isn't your battle!", ephemeral=True)
             return
         
+        # Check if session is finished
+        if self.pve_session.is_finished():
+            await interaction.response.send_message("❌ This battle has ended!", ephemeral=True)
+            return
+        
         if self.pve_session.is_ai_turn():
             await interaction.response.send_message("❌ Wait for the Enemy to finish its turn!", ephemeral=True)
             return
@@ -63,79 +80,93 @@ class PVECombatView(CombatView):
         roll = random.randint(1, 6)
         damage, mod = self.pve_session.apply_roll(user_id, roll)
         
-        description = f"🎲 You rolled a {roll}!\n"
+        description = f"🎲 You rolled a **{roll}**!\n"
         if mod == 0:
-            description += "You missed!"
+            description += "💨 You missed!"
         else:
-            description += f"Hit modifier: ×{mod:.2f}\nDamage dealt: **{damage}**"
+            description += f"⚡ Hit modifier: ×{mod:.2f}\n💥 Damage dealt: **{damage}**"
         
         embed = self.build_embed()
         embed.add_field(name="🎯 Your Attack", value=description, inline=False)
         
         # Check if AI is defeated
         if self.pve_session.hp[self.pve_session.ai_id] <= 0:
-            coin_reward = PVE_COIN_REWARD.get(self.pve_session.difficulty.lower(), 0)
-            xp_reward = PVE_XP_REWARD.get(self.pve_session.difficulty.lower(), 0)
-
-            await give_coins(self.pve_session.player_id, coin_reward)
-            new_level, level_coins = await update_xp_and_check_level(self.pve_session.player_id, xp_reward)
-
-            embed.title = "🏆 Victory!"
-            embed.color = Color.green()
-            embed.add_field(
-            name="🎉 Battle Complete!", 
-            value=f"You have successfully defeated **{self.pve_session.p2_card['name']}**!\n",
-            inline=False
-        )
-            embed.add_field(
-                name="Reward",
-                value= f"You have earned {coin_reward} coins and {xp_reward} XP!",
-                inline=False
-            )
-
-            if new_level:
-                embed.add_field(
-                    name="🆙 Level Up!", 
-                    value=f"You reached Level {new_level} and earned +{level_coins} coins!", 
-                    inline=False
-                )
-
-            await self.session_manager.end_session(user_id, reason="pve_victory")
-            self.disable_all()
-
-            await interaction.response.edit_message(embed=embed, view=self)
+            await self._handle_victory(interaction, embed)
             return
         
         await interaction.response.edit_message(embed=embed, view=self)
         
-        ai_roll, ai_result = await self.pve_session.ai_take_turn()
-        if ai_roll is not None:
-            ai_damage, ai_mod = ai_result
-            
-            ai_description = f"👹 Enemy rolled a {ai_roll}!\n"
-            if ai_mod == 0:
-                ai_description += "Enemy missed!"
-            else:
-                ai_description += f"Hit modifier: ×{ai_mod:.2f}\nDamage to you: **{ai_damage}**"
-            
-            embed = self.build_embed()
-            embed.add_field(name="🎯 Enemy Attack", value=ai_description, inline=False)
-            
-            # Check if player is defeated
-            if self.pve_session.hp[self.pve_session.player_id] <= 0:
-                embed.title = "💀 Defeat"
-                embed.color = Color.red()
-                embed.add_field(
-                    name="⚰️ Battle Lost", 
-                    value=f"**{self.pve_session.p2_card['name']}** has proven too powerful!\n🔄 Train harder and try again!",
-                    inline=False
-                )                
-                await self.session_manager.end_session(user_id, reason="pve_defeat")
-                self.disable_all()
-            
-            await interaction.edit_original_response(embed=embed, view=self)
+        # AI takes its turn
+        try:
+            ai_roll, ai_result = await self.pve_session.ai_take_turn()
+            if ai_roll is not None:
+                await self._handle_ai_turn(interaction, ai_roll, ai_result)
+        except Exception as e:
+            await interaction.followup.send("⚠️ AI turn failed, but the battle continues!", ephemeral=True)
+    
+    async def _handle_victory(self, interaction: Interaction, embed: Embed):
+        coin_reward = PVE_COIN_REWARD.get(self.pve_session.difficulty, 0)
+        xp_reward = PVE_XP_REWARD.get(self.pve_session.difficulty, 0)
 
-class PVESetupView(ui.View):    
+        await give_coins(self.pve_session.player_id, coin_reward)
+        new_level, level_coins = await update_xp_and_check_level(self.pve_session.player_id, xp_reward)
+
+        embed.title = "🏆 Victory!"
+        embed.color = Color.green()
+        embed.add_field(
+            name="🎉 Battle Complete!", 
+            value=f"You have successfully defeated **{self.pve_session.p2_card['name']}**!",
+            inline=False
+        )
+        embed.add_field(
+            name="💰 Rewards",
+            value=f"💎 {coin_reward} coins\n⭐ {xp_reward} XP",
+            inline=False
+        )
+
+        if new_level:
+            embed.add_field(
+                name="🆙 Level Up!", 
+                value=f"You reached **Level {new_level}** and earned **+{level_coins} coins**!", 
+                inline=False
+            )
+
+        await self.session_manager.end_session(self.pve_session.player_id, reason="pve_victory")
+        self.disable_all()
+
+        await interaction.response.edit_message(embed=embed, view=self)
+    
+    async def _handle_ai_turn(self, interaction: Interaction, ai_roll: int, ai_result: tuple):
+        ai_damage, ai_mod = ai_result
+        
+        ai_description = f"🎲 Enemy rolled a **{ai_roll}**!\n"
+        if ai_mod == 0:
+            ai_description += "💨 Enemy missed!"
+        else:
+            ai_description += f"⚡ Hit modifier: ×{ai_mod:.2f}\n💥 Damage to you: **{ai_damage}**"
+        
+        embed = self.build_embed()
+        embed.add_field(name="🎯 Enemy Attack", value=ai_description, inline=False)
+        
+        # Check if player is defeated
+        if self.pve_session.hp[self.pve_session.player_id] <= 0:
+            embed.title = "💀 Defeat"
+            embed.color = Color.red()
+            embed.add_field(
+                name="⚰️ Battle Lost", 
+                value=(
+                    f"**{self.pve_session.p2_card['name']}** has proven too powerful!\n"
+                    f"🔄 Train harder and try again!"
+                ),
+                inline=False
+            )                
+            await self.session_manager.end_session(self.pve_session.player_id, reason="pve_defeat")
+            self.disable_all()
+        
+        await interaction.edit_original_response(embed=embed, view=self)
+
+class PVESetupView(ui.View):
+    
     def __init__(self, user_id: int):
         super().__init__(timeout=120)
         self.user_id = user_id
@@ -184,6 +215,7 @@ class PVESetupView(ui.View):
         await start_pve_combat(interaction, self.user_id, self.selected_card, self.selected_difficulty)
 
 class DifficultyDropdown(ui.Select):
+    
     def __init__(self, options, parent_view):
         super().__init__(placeholder="Choose difficulty", options=options)
         self.parent_view = parent_view
@@ -197,6 +229,7 @@ class DifficultyDropdown(ui.Select):
         )
 
 class PVECardSelectView(ui.View):
+    
     def __init__(self, user_id: int, cards, parent_setup_view):
         super().__init__(timeout=60)
         self.user_id = user_id
@@ -216,6 +249,7 @@ class PVECardSelectView(ui.View):
         return interaction.user.id == self.user_id
 
 class CardDropdown(ui.Select):
+    
     def __init__(self, options, parent_view):
         super().__init__(placeholder="Select your card", options=options)
         self.parent_view = parent_view
@@ -233,15 +267,9 @@ class CardDropdown(ui.Select):
         }
         
         self.parent_view.parent_setup_view.selected_card = card_data
-        
-        # Enable start battle button
-        for item in self.parent_view.parent_setup_view.children:
-            if isinstance(item, ui.Button) and item.label == "start_battle":
-                item.disabled = False
-        
         await interaction.response.send_message(f"✅ Selected **{card_data['name']}**!", ephemeral=True)
 
-async def get_random_ai_card():
+async def get_random_ai_card() -> dict:
     all_cards = await get_all_cards()
     if not all_cards:
         # Fallback card if no cards in database
@@ -276,7 +304,7 @@ async def start_pve_combat(interaction: Interaction, player_id: int, player_card
     difficulty_info = AI_DIFFICULTIES[difficulty]
     embed.add_field(
         name="⚔️ Battle Started!", 
-        value=f"Difficulty: **{difficulty_info['name']}**\nYou go first!", 
+        value=f"Difficulty: **{difficulty_info['name']}**\n🎯 You go first!", 
         inline=False
     )
     
