@@ -66,11 +66,13 @@ class CardDropdown(ui.Select):
         card_data = {
             "id": card[0],
             "name": card[1],
+            "rarity": card[2],
             "attack": card[3],
             "defense": card[4],
             "hp": card[5],
+            "image": card[6] if len(card) > 6 else None,
         }
-        
+
         session_manager.set_card_selection(self.parent_view.target_user_id, card_data)
         self.parent_view.selected_card_id = card_id
         await interaction.response.send_message("✅ Card selected. Click 'Ready' to confirm.", ephemeral=True)

@@ -2,7 +2,12 @@ import random
 import asyncio
 from typing import Optional
 from enum import Enum
-from src.combat.session import CombatSession
+from src.combat.session import (
+    CombatSession,
+    ACTION_STRIKE,
+    ACTION_GUARD,
+    ACTION_SPECIAL,
+)
 
 # Constants
 PVE_SESSION_TIMEOUT_MINUTES = 30
@@ -75,47 +80,48 @@ class PVESession(CombatSession):
     def is_ai_turn(self) -> bool:
         return self.turn == self.ai_id
     
-    async def ai_take_turn(self) -> tuple[Optional[int], Optional[tuple[int, float]]]:
+    async def ai_take_turn(self) -> Optional[dict]:
+        """Run the AI's turn: tick statuses, choose an action, resolve it.
+
+        Returns the structured result dict from ``resolve_action`` (with the chosen
+        action), or ``None`` if it isn't the AI's turn / the battle is over / the
+        turn was skipped by a stun.
+        """
         if not self.is_ai_turn() or self.is_finished():
-            return None, None
-        
+            return None
+
+        # AI "thinks" for a realistic delay based on difficulty.
+        difficulty_settings = AI_DIFFICULTIES[self.difficulty]
+        min_delay, max_delay = difficulty_settings["ai_delay"]
+        await asyncio.sleep(random.uniform(min_delay, max_delay))
+
+        # Status tick (burn / stun / etc.) before acting.
+        tick = self.start_turn(self.ai_id)
+        if tick["skipped"] or self.is_finished():
+            tick["action"] = "skip"
+            return tick
+
         try:
-            # AI "thinks" for a realistic delay based on difficulty
-            difficulty_settings = AI_DIFFICULTIES[self.difficulty]
-            min_delay, max_delay = difficulty_settings["ai_delay"]
-            await asyncio.sleep(random.uniform(min_delay, max_delay))
-            
-            if difficulty_settings["smart_moves"]:
-                # Hard AI tries to be strategic
-                roll = self._smart_ai_roll()
-            else:
-                # Easy/Normal AI rolls randomly
-                roll = random.randint(1, 6)
-            
-            damage, modifier = self.apply_roll(self.ai_id, roll)
-            return roll, (damage, modifier)
-            
-        except Exception as e:
-            # Default to random roll if strategy fails
-            roll = random.randint(1, 6)
-            damage, modifier = self.apply_roll(self.ai_id, roll)
-            return roll, (damage, modifier)
-    
-    def _smart_ai_roll(self) -> int:
-        try:
-            player_hp_pct = self.hp[self.player_id] / self.p1_card["hp"]
-            ai_hp_pct = self.hp[self.ai_id] / self.p2_card["hp"]
-            
-            # If AI is low on health, try for higher rolls (risky but necessary)
-            if ai_hp_pct < 0.3:
-                weights = [5, 10, 15, 20, 25, 25]  # Favor 5 and 6
-            # If player is low on health, play more conservatively (avoid 1 and 6)
-            elif player_hp_pct < 0.3:
-                weights = [10, 15, 25, 25, 15, 10]  # Favor middle rolls
-            # Normal situation: slight preference for mid-high rolls
-            else:
-                weights = [5, 15, 25, 25, 20, 10]  # Balanced with slight high bias
-            
-            return random.choices([1, 2, 3, 4, 5, 6], weights=weights)[0]
-        except Exception as e:
-            return random.randint(1, 6)
+            action = self._choose_ai_action(difficulty_settings["smart_moves"])
+            return self.resolve_action(self.ai_id, action)
+        except Exception:
+            # Fall back to a plain strike if anything goes wrong.
+            return self.resolve_action(self.ai_id, ACTION_STRIKE)
+
+    def _choose_ai_action(self, smart: bool) -> str:
+        ai_hp_pct = self.hp[self.ai_id] / max(1, self.p2_card["hp"])
+
+        # Special whenever it's charged (strong play for every difficulty).
+        if self.can_special(self.ai_id):
+            return ACTION_SPECIAL
+
+        if smart:
+            # Hard AI: guard when hurt, otherwise press the attack.
+            if ai_hp_pct < 0.35:
+                return random.choices([ACTION_GUARD, ACTION_STRIKE], weights=[60, 40])[0]
+            return ACTION_STRIKE
+
+        # Easy / Normal: mostly strike, occasional guard when low.
+        if ai_hp_pct < 0.3 and random.random() < 0.35:
+            return ACTION_GUARD
+        return ACTION_STRIKE
