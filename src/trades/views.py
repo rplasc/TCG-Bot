@@ -24,6 +24,7 @@ class TradeView(ui.View):
         self.add_item(self.target_dropdown)
         self.add_item(AddCoinsButton(self))
         self.add_item(self.submit_button)
+        self.add_item(CancelTradeButton(self))
 
 class TradeDropdown(ui.Select):
     def __init__(self, label: str, cards: list, parent_view: TradeView):
@@ -142,6 +143,20 @@ class ConfirmTradeView(ui.View):
         await interaction.message.edit(view=self)
 
         await interaction.response.send_message("❌ Trade declined.", ephemeral=False)
+
+class CancelTradeButton(ui.Button):
+    def __init__(self, parent_view):
+        super().__init__(label="✖ Cancel", style=ButtonStyle.secondary)
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: Interaction):
+        if interaction.user.id != self.parent_view.user_id:
+            await interaction.response.send_message("❌ Only the trade initiator can cancel.", ephemeral=True)
+            return
+        for item in self.parent_view.children:
+            item.disabled = True
+        self.parent_view.stop()
+        await interaction.response.edit_message(content="❌ Trade cancelled.", embed=None, view=self.parent_view)
 
 class AddCoinsButton(ui.Button):
     def __init__(self, parent_view):

@@ -6,11 +6,27 @@ from src.database.db import (register_user,add_to_user_collection, user_owns_car
                              update_xp_and_check_level, can_claim_daily_reward, claim_daily_reward_with_streak
                              )
 from src.utils.time import get_time_until_next_daily
+from src.utils.ui import error_embed
 
 @client.tree.command(name="shop", description="View all available shops")
 async def shop(interaction: Interaction):
+    embed = Embed(
+        title="🛍️ Shop",
+        description="Choose what you'd like to browse below.",
+        color=Color.blurple()
+    )
+    embed.add_field(
+        name="📦 Card Packs",
+        value="Spend coins on packs (single, triple, quintuple, or boosted) for randomized pulls.",
+        inline=False
+    )
+    embed.add_field(
+        name="🃏 Daily Card Shop",
+        value="Buy specific cards directly from a rotating selection.",
+        inline=False
+    )
     await interaction.response.send_message(
-        "🛍️ Choose the type of shop you'd like to visit:",
+        embed=embed,
         view=ShopTypeView(interaction.user.id),
         ephemeral=True
     )
@@ -169,4 +185,8 @@ async def daily(interaction: Interaction):
         await interaction.response.send_message(embed=embed)
 
     except Exception as e:
-        await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+        print(f"Error in /daily for {user_id}: {e}")
+        await interaction.response.send_message(
+            embed=error_embed("Something went wrong claiming your daily pack. Please try again."),
+            ephemeral=True
+        )

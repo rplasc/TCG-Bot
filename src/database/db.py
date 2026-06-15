@@ -249,10 +249,31 @@ async def get_top_users_by_xp(limit=10):
 async def get_top_users_by_rank(limit=10):
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
-            "SELECT name, rank, level FROM users ORDER BY rank DESC LIMIT ?",
+            "SELECT name, rank, wins FROM users ORDER BY rank DESC, wins DESC LIMIT ?",
             (limit,)
         )
         return await cursor.fetchall()
+
+async def get_user_rank_position(user_id):
+    """Return (position, rank, wins) for a user using the leaderboard ordering,
+    or None if the user has no row. ``position`` is 1-based."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT rank, wins FROM users WHERE id = ?", (user_id,))
+        me = await cursor.fetchone()
+        if not me:
+            return None
+        rank, wins = me
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM users WHERE rank > ? OR (rank = ? AND wins > ?)",
+            (rank, rank, wins)
+        )
+        ahead = (await cursor.fetchone())[0]
+        return ahead + 1, rank, wins
+
+async def get_all_collection_names():
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT name FROM collections ORDER BY name ASC")
+        return [row[0] for row in await cursor.fetchall()]
 
 async def update_card_by_name(name, *, attack=None, defense=None, hp=None, image=None, rarity=None, collection_name=None):
     async with aiosqlite.connect(DB_PATH) as db:

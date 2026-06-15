@@ -102,10 +102,5 @@ class NextPageButton(ui.Button):
         await interaction.response.edit_message(embed=embed, view=new_view)
 
 def build_single_card_embed(username, card, index, total):
-    embed = Embed(
-        title=f"🃏 {card[1]} ({card[2].title()})",
-        description=f"**ATK:** {card[3]} | **DEF:** {card[4]} | **HP:** {card[5]}",
-        color=Color.teal()
-    )
-    embed.set_footer(text=f"Card {index + 1} of {total}")
-    return embed
+    from src.utils.ui import card_embed
+    return card_embed(card, footer=f"{username} • Card {index + 1} of {total}")

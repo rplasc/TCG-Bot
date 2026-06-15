@@ -29,3 +29,13 @@ class CasinoView(ui.View):
             await interaction.response.send_message("❌ You can't use this.", ephemeral=True)
             return
         await interaction.response.send_modal(RouletteBetModal())
+
+    @ui.button(label="✖ Close", style=ButtonStyle.secondary, custom_id="casino_close")
+    async def close_button(self, interaction: Interaction, button: ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Not your casino session.", ephemeral=True)
+            return
+        for child in self.children:
+            child.disabled = True
+        self.stop()
+        await interaction.response.edit_message(content="🎰 Casino closed. Come back soon!", embed=None, view=self)
