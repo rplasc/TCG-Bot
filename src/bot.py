@@ -16,6 +16,12 @@ reaction_cooldowns = defaultdict(lambda: 0)
 
 @client.event
 async def on_ready():
+    # Remove any leftover guild-specific command overrides so commands
+    # don't show up twice (once globally, once per-guild).
+    for guild in client.guilds:
+        client.tree.clear_commands(guild=guild)
+        await client.tree.sync(guild=guild)
+
     await client.tree.sync()
     await init_db()
 
