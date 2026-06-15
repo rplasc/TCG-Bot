@@ -1,8 +1,11 @@
+import logging
 import random
 from discord import ui, Interaction, Embed, ButtonStyle, Color
 from src.combat.session import CombatSession
 from src.database.db import give_coins, get_rank_id, update_rp_and_check_rank, add_win
 from src.utils.ranks import calculate_match_multiplier, get_rp_change
+
+logger = logging.getLogger(__name__)
 
 # Constants
 PVP_COIN_REWARD = 10
@@ -112,12 +115,12 @@ class CombatView(ui.View):
 
             # Rewards for winner
             await give_coins(winner, PVP_COIN_REWARD)
-            rp_gain = get_rp_change(winner, True, multiplier)
+            rp_gain = get_rp_change(winner_rank_id, True, multiplier)
             new_rank_winner = await update_rp_and_check_rank(winner, rp_gain)
             await add_win(winner)
 
-            # RP loss for loser
-            rp_loss = get_rp_change(loser, False, multiplier)
+            # RP loss for loser (rp_loss is negative)
+            rp_loss = get_rp_change(loser_rank_id, False, multiplier)
             new_rank_loser = await update_rp_and_check_rank(loser, rp_loss)
 
             embed.title = "🏆 Combat Ended"
@@ -129,7 +132,7 @@ class CombatView(ui.View):
             )
             embed.add_field(
                 name="📊 RP Change",
-                value=f"<@{winner}> +{rp_gain} RP\n<@{loser}> -{rp_loss} RP",
+                value=f"<@{winner}> +{rp_gain} RP\n<@{loser}> -{abs(rp_loss)} RP",
                 inline=False
             )
 
@@ -150,7 +153,10 @@ class CombatView(ui.View):
             await self.session_manager.end_session(interaction.user.id, reason="victory")
             self.disable_all()
 
-        except Exception as e:
+        except Exception:
+            logger.exception(
+                "Error processing PVP rewards (winner=%s, loser=%s)", winner, loser
+            )
             embed.add_field(
                 name="⚠️ Error",
                 value="There was an error processing rewards. Please contact an admin.",

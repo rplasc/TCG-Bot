@@ -106,11 +106,12 @@ class ReadyButton(ui.Button):
 
         await interaction.message.edit(embed=embed, view=None)
 
-        # Check if both players are ready
-        matched_pair = session_manager.get_matched_pair()
-        if matched_pair:
-            challenger_id, opponent_id = matched_pair
-            await start_combat(interaction.channel, challenger_id, opponent_id)
+        # Mark this player ready and only start once BOTH players have confirmed
+        session_manager.set_player_ready(user_id)
+        partner = session_manager.get_combat_partner(user_id)
+
+        if partner is not None and session_manager.are_both_ready(user_id, partner):
+            await start_combat(interaction.channel, user_id, partner)
         else:
             await interaction.channel.send(f"🕒 Waiting for the other player to be ready...")
 
@@ -167,6 +168,9 @@ class ChallengeResponseView(ui.View):
         )
         
         session_manager.clear_pending_challenge(self.opponent_id)
+
+        # Pair the two players so readiness can be matched within this challenge
+        session_manager.set_combat_pair(self.challenger_id, self.opponent_id)
 
         await send_card_selection(interaction.channel, self.challenger_id)
         await send_card_selection(interaction.channel, self.opponent_id)
