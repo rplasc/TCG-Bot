@@ -2,7 +2,7 @@ import logging
 from discord import app_commands, Interaction, Embed, Color, ui, Member, SelectOption, ButtonStyle
 from src.aclient import client
 from src.combat.view import CombatView
-from src.combat.pve_view import PVESetupView, AI_DIFFICULTIES
+from src.combat.hunt_view import HuntSetupView, LOCATIONS
 from src.combat.session_manager import session_manager
 from src.database.db import get_card, get_user_collection
 
@@ -203,7 +203,7 @@ async def challenge(interaction: Interaction, opponent: Member):
         return
     
     if opponent.bot:
-        await interaction.response.send_message("❌ You can't challenge a bot. Use `/pve` instead!", ephemeral=True)
+        await interaction.response.send_message("❌ You can't challenge a bot. Use `/hunt` instead!", ephemeral=True)
         return
 
     # Prevent multiple active sessions
@@ -235,29 +235,29 @@ async def challenge(interaction: Interaction, opponent: Member):
     view = ChallengeResponseView(user_id, opponent_id)
     await interaction.response.send_message(content=f"<@{opponent_id}>", embed=embed, view=view)
     
-@client.tree.command(name="pve", description="Fight against an AI opponent!")
-async def pve_command(interaction: Interaction):
+@client.tree.command(name="hunt", description="Embark on a hunting expedition against waves of beasts!")
+async def hunt_command(interaction: Interaction):
     user_id = interaction.user.id
-    
+
     # Check if user is already in a session
     if session_manager.is_user_in_session(user_id):
         await interaction.response.send_message("❌ You're already in a battle!", ephemeral=True)
         return
-    
-    view = PVESetupView(user_id)
+
+    view = HuntSetupView(user_id)
     embed = Embed(
-        title="🎮 PVE Combat Setup",
-        description="Choose your difficulty and card to fight the AI!",
-        color=Color.blue()
+        title="🏹 Hunt Setup",
+        description="Choose a hunting ground and a card, then press deeper for greater rewards — but death forfeits your haul!",
+        color=Color.dark_green()
     )
-    
+
     embed.add_field(
-        name="🎯 Difficulties",
+        name="🗺️ Hunting Grounds",
         value="\n".join([
-            f"**{diff['name']}**: {diff['description']}"
-            for diff in AI_DIFFICULTIES.values()
+            f"{loc['emoji']} **{loc['name']}**: {loc['description']}"
+            for loc in LOCATIONS.values()
         ]),
         inline=False
     )
-    
+
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
