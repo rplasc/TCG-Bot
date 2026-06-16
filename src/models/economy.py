@@ -10,3 +10,13 @@ CREATE TABLE IF NOT EXISTS currency_ledger (
     created_at TEXT NOT NULL
 );
 """
+
+DAILY_REWARD_BUDGETS_TABLE = """
+CREATE TABLE IF NOT EXISTS daily_reward_budgets (
+    user_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    category TEXT NOT NULL,
+    amount_earned INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, date, category)
+);
+"""

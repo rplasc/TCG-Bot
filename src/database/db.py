@@ -11,7 +11,8 @@ from src.models.daily import DAILY_TABLE
 from src.models.progress import COLLECTION_REWARDS_TABLE
 from src.models.shop import DAILY_SHOP_TABLE
 from src.models.casino import CASINO_STATS_TABLE
-from src.models.economy import CURRENCY_LEDGER_TABLE
+from src.models.economy import CURRENCY_LEDGER_TABLE, DAILY_REWARD_BUDGETS_TABLE
+from src.economy.config import DAILY_CLAIM, DAILY_STREAK_BONUS, LEVEL_UP_REWARD
 
 from src.utils.ranks import calculate_user_rank
 from src.utils.levels import calculate_level
@@ -33,6 +34,7 @@ async def init_db():
         await db.execute(DAILY_SHOP_TABLE)
         await db.execute(CASINO_STATS_TABLE)
         await db.execute(CURRENCY_LEDGER_TABLE)
+        await db.execute(DAILY_REWARD_BUDGETS_TABLE)
         await db.commit()
 
 # In-memory cache
@@ -265,6 +267,48 @@ async def insert_ledger_entry(user_id, amount, balance_after, source, source_id=
         )
         await db.commit()
 
+async def get_reward_budget_earned(user_id, date, categories) -> int:
+    """Sum amount_earned for the given categories on a date."""
+    if not categories:
+        return 0
+    placeholders = ",".join("?" for _ in categories)
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            f"""
+            SELECT COALESCE(SUM(amount_earned), 0) FROM daily_reward_budgets
+            WHERE user_id = ? AND date = ? AND category IN ({placeholders})
+            """,
+            (user_id, date, *categories),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def add_reward_budget(user_id, date, category, amount):
+    """Add to the running amount_earned for (user, date, category)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO daily_reward_budgets (user_id, date, category, amount_earned)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, date, category) DO UPDATE SET
+                amount_earned = amount_earned + excluded.amount_earned
+            """,
+            (user_id, date, category, amount),
+        )
+        await db.commit()
+
+async def _insert_ledger_tx(db, user_id, amount, balance_after, source, source_id=None, metadata_json=None):
+    """Write a ledger row using an already-open transaction (no commit)."""
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    await db.execute(
+        """
+        INSERT INTO currency_ledger
+            (user_id, amount, balance_after, source, source_id, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (user_id, amount, balance_after, source, source_id, metadata_json, now),
+    )
+
 async def update_xp_and_check_level(user_id: int, xp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:
         try:
@@ -290,8 +334,12 @@ async def update_xp_and_check_level(user_id: int, xp_gain: int):
             # Award coins if leveled up
             if new_level > old_level:
                 coins_gained = (new_level - old_level) * 5
-                await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", 
+                await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?",
                                 (coins_gained, user_id))
+                cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
+                balance_after = (await cursor.fetchone())[0]
+                await _insert_ledger_tx(db, user_id, coins_gained, balance_after, LEVEL_UP_REWARD,
+                                        None, f'{{"new_level": {new_level}}}')
                 await db.commit()
                 return new_level, coins_gained
             
@@ -595,9 +643,15 @@ async def claim_daily_reward_with_streak(user_id: int) -> dict:
                 VALUES (?, ?, ?, ?)
             """, (user_id, current_datetime, new_streak, current_datetime))
             
-            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (total_coins, user_id))            
+            await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (total_coins, user_id))
+            cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
+            final_balance = (await cursor.fetchone())[0]
+            await _insert_ledger_tx(db, user_id, base_coins, final_balance - bonus_coins, DAILY_CLAIM)
+            if bonus_coins > 0:
+                await _insert_ledger_tx(db, user_id, bonus_coins, final_balance, DAILY_STREAK_BONUS,
+                                        None, f'{{"streak": {new_streak}}}')
             await db.commit()
-            
+
             return {
                 'success': True,
                 'base_coins': base_coins,
@@ -626,6 +680,10 @@ async def update_xp_and_check_level_in_transaction(db, user_id: int, xp_gain: in
     if new_level > old_level:
         coins_gained = (new_level - old_level) * 5
         await db.execute("UPDATE users SET coins = coins + ? WHERE id = ?", (coins_gained, user_id))
+        cursor = await db.execute("SELECT coins FROM users WHERE id = ?", (user_id,))
+        balance_after = (await cursor.fetchone())[0]
+        await _insert_ledger_tx(db, user_id, coins_gained, balance_after, LEVEL_UP_REWARD,
+                                None, f'{{"new_level": {new_level}}}')
         return {'new_level': new_level, 'coins_gained': coins_gained}
-    
+
     return None

@@ -2,9 +2,11 @@ from discord import Embed, Interaction, Color
 from src.aclient import client
 from src.shop.logic import RARITY_EMOJIS, draw_card, RARITY_XP, RARITY_POOL_DAILY, DUPLICATE_REWARDS
 from src.shop.views import ShopTypeView
-from src.database.db import (register_user,add_to_user_collection, user_owns_card, give_coins, 
+from src.database.db import (register_user,add_to_user_collection, user_owns_card,
                              update_xp_and_check_level, can_claim_daily_reward, claim_daily_reward_with_streak
                              )
+from src.economy.service import award_coins
+from src.economy.config import SHOP_DUPLICATE_REFUND
 from src.utils.time import get_time_until_next_daily
 from src.utils.ui import error_embed
 
@@ -81,7 +83,7 @@ async def daily(interaction: Interaction):
 
         # Handle card ownership and duplicates
         if await user_owns_card(user_id, card_id):
-            await give_coins(user_id, coin_reward)
+            await award_coins(user_id, coin_reward, SHOP_DUPLICATE_REFUND, {"card_id": card_id, "rarity": rarity, "source_flow": "daily_card"})
             owned_text = f"(dupe) → +{coin_reward} coins"
         else:
             await add_to_user_collection(user_id, card_id)

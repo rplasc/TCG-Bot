@@ -4,7 +4,9 @@ from discord import ui, Interaction, Embed, ButtonStyle, Color
 
 from src.combat.session import CombatSession, ACTION_STRIKE, ACTION_GUARD, ACTION_SPECIAL
 from src.combat import mechanics
-from src.database.db import give_coins, get_rank_id, update_rp_and_check_rank, add_win
+from src.database.db import get_rank_id, update_rp_and_check_rank, add_win
+from src.economy.service import award_coins
+from src.economy.config import COMBAT_PVP_WIN
 from src.utils.ranks import calculate_match_multiplier, get_rp_change
 
 logger = logging.getLogger(__name__)
@@ -158,7 +160,7 @@ class CombatView(ui.View):
             multiplier = calculate_match_multiplier(winner_rank_id, loser_rank_id)
 
             # Rewards for winner
-            await give_coins(winner, PVP_COIN_REWARD)
+            await award_coins(winner, PVP_COIN_REWARD, COMBAT_PVP_WIN, {"loser": loser})
             rp_gain = get_rp_change(winner_rank_id, True, multiplier)
             new_rank_winner = await update_rp_and_check_rank(winner, rp_gain)
             await add_win(winner)

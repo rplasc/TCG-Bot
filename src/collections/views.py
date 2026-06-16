@@ -1,5 +1,7 @@
 from discord import ui, Interaction, ButtonStyle, Embed, Color
-from src.database.db import get_card, remove_from_user_collection, get_user_collection, give_coins
+from src.database.db import get_card, remove_from_user_collection, get_user_collection
+from src.economy.service import award_coins
+from src.economy.config import COLLECTION_CARD_SALE
 
 SELL_VALUES = {
     "common": 10,
@@ -73,7 +75,7 @@ class SellCardButton(ui.Button):
 
         await remove_from_user_collection(interaction.user.id, self.card_id)
         coins = SELL_VALUES.get(self.rarity, 5)
-        await give_coins(interaction.user.id, coins)
+        await award_coins(interaction.user.id, coins, COLLECTION_CARD_SALE, {"card_id": self.card_id, "rarity": self.rarity})
         self.disabled = True
         self.label = "Sold ✅"
         await interaction.response.edit_message(view=self.parent_view)

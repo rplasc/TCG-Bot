@@ -2,8 +2,10 @@ from discord import Interaction, Embed, Color, app_commands
 from src.aclient import client
 from src.database.db import (get_user_collection, get_cards_by_collection, get_card_ids_in_collection,
                         get_user_owned_card_ids, get_missing_cards_in_collection,
-                        get_collection_id, has_claimed_collection_reward, claim_collection_reward, give_coins,
+                        get_collection_id, has_claimed_collection_reward, claim_collection_reward,
                         update_xp_and_check_level, get_all_collection_names)
+from src.economy.service import award_coins
+from src.economy.config import COLLECTION_REWARD
 from src.collections.views import CardPageView, build_single_card_embed
 from src.shop.logic import RARITY_EMOJIS
 from src.utils.ui import FieldPaginator, progress_bar, error_embed
@@ -89,7 +91,7 @@ async def collection_progress(interaction: Interaction, collection: str):
     if owned == total:
         if not await has_claimed_collection_reward(user_id, collection_id):
             await claim_collection_reward(user_id, collection_id)
-            await give_coins(user_id, 200)
+            await award_coins(user_id, 200, COLLECTION_REWARD, {"collection": collection, "collection_id": collection_id})
             new_level, coins_awarded = await update_xp_and_check_level(user_id, 250)
             embed.add_field(name="🎁 Reward", value="You earned **200 coins** and **250 XP**!", inline=False)
             if new_level:

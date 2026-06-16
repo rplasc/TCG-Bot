@@ -13,6 +13,7 @@ class CasinoEvent:
 
 async def emit_casino_event(event_type: str, result: CasinoResult, extra: dict | None = None) -> CasinoEvent:
     from src.database.db import update_casino_stats
+    from src.economy.service import record_casino_net
 
     payload = {
         "game": result.game,
@@ -43,5 +44,7 @@ async def emit_casino_event(event_type: str, result: CasinoResult, extra: dict |
             slot_jackpot=(result.outcome == "jackpot"),
             roulette_win=(result.outcome in ("win", "exact_hit") and result.game == "roulette"),
         )
+        # Track daily casino net winnings for telemetry (payouts are not reduced).
+        await record_casino_net(result.user_id, result.net)
 
     return event

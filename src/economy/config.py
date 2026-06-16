@@ -42,12 +42,40 @@ COLLECTION_CARD_SALE = "collection.card_sale"
 COLLECTION_REWARD = "collection.reward"
 COMBAT_PVP_WIN = "combat.pvp_win"
 COMBAT_HUNT_BANK = "combat.hunt_bank"
+LEVEL_UP_REWARD = "level.up_reward"
 CASINO_WAGER = "casino.wager"
 CASINO_PAYOUT = "casino.payout"
 TRADE_OFFER_TRANSFER = "trade.offer_transfer"
 ADMIN_ADJUSTMENT = "admin.adjustment"
 EVENT_REWARD = "event.reward"
 CHALLENGE_REWARD = "challenge.reward"
+
+
+# --- Daily repeatable reward budget (soft caps) ---
+
+# Budget categories for the daily_reward_budgets table.
+BUDGET_REPEATABLE = "repeatable"
+BUDGET_CASINO_NET = "casino_net"
+BUDGET_COMBAT = "combat"
+BUDGET_HUNT = "hunt"
+BUDGET_CHALLENGE = "challenge"
+BUDGET_EVENT = "event"
+
+# Categories that count toward the shared repeatable cap AND get reduced once
+# the tier budget is exceeded. casino_net is tracked separately for telemetry
+# only and is intentionally excluded here.
+REDUCIBLE_BUDGET_CATEGORIES = (BUDGET_HUNT, BUDGET_COMBAT, BUDGET_REPEATABLE)
+
+# Diminishing-returns bands, expressed as (cumulative-multiple-of-budget upper
+# bound, payout multiplier). The last band uses None as an open upper bound.
+#   0%–100% of budget  -> full value
+#   100%–150%          -> 50%
+#   150%+              -> 25%
+REPEATABLE_SOFT_CAP_BANDS = [
+    (1.0, 1.0),
+    (1.5, 0.5),
+    (None, 0.25),
+]
 
 
 def tier_for_level(level: int) -> str:

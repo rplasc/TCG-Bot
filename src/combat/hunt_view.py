@@ -7,7 +7,9 @@ from src.combat import mechanics
 from src.combat import hunt_events
 from src.combat.hunt_session import HuntSession, LOCATIONS, get_location
 from src.combat.session_manager import session_manager
-from src.database.db import get_card, get_user_collection, get_all_cards, give_coins, update_xp_and_check_level
+from src.database.db import get_card, get_user_collection, get_all_cards, update_xp_and_check_level
+from src.economy.service import award_coins, apply_repeatable_reward_budget
+from src.economy.config import COMBAT_HUNT_BANK, BUDGET_HUNT
 
 
 def create_hp_bar(current: int, maximum: int, length: int = 10) -> str:
@@ -207,10 +209,11 @@ class HuntOutcomeView(ui.View):
 
     @ui.button(label="🎒 Bank & Leave", style=ButtonStyle.success)
     async def bank_and_leave(self, interaction: Interaction, button: ui.Button):
-        coins = self.hunt.pending_coins
+        base_coins = self.hunt.pending_coins
         xp = self.hunt.pending_xp
 
-        await give_coins(self.hunt.player_id, coins)
+        coins = await apply_repeatable_reward_budget(self.hunt.player_id, base_coins, BUDGET_HUNT)
+        await award_coins(self.hunt.player_id, coins, COMBAT_HUNT_BANK, {"location": self.hunt.location, "waves_cleared": self.hunt.waves_cleared, "base_coins": base_coins})
         new_level, level_coins = await update_xp_and_check_level(self.hunt.player_id, xp)
 
         loc = get_location(self.hunt.location)
@@ -219,10 +222,13 @@ class HuntOutcomeView(ui.View):
             description=f"You return from {loc['emoji']} {loc['name']} with your spoils.",
             color=Color.gold(),
         )
+        coins_line = f"💰 {coins} coins"
+        if coins < base_coins:
+            coins_line += f" *(daily cap — reduced from {base_coins})*"
         embed.add_field(
             name="🏆 Expedition Summary",
             value=f"Waves cleared: **{self.hunt.waves_cleared}**\n"
-                  f"💰 {coins} coins\n⭐ {xp} XP",
+                  f"{coins_line}\n⭐ {xp} XP",
             inline=False,
         )
         if new_level:

@@ -1,8 +1,10 @@
 from discord import ui, Interaction, Embed, ButtonStyle, SelectOption, Color, TextStyle
 from src.database.db import (
     remove_from_user_collection, add_to_user_collection,
-    can_afford, deduct_coins, give_coins, get_card
+    can_afford, get_card
 )
+from src.economy.service import transfer_coins
+from src.economy.config import TRADE_OFFER_TRANSFER
 
 class TradeView(ui.View):
     def __init__(self, user_id, target_id, user_cards, target_cards):
@@ -123,8 +125,7 @@ class ConfirmTradeView(ui.View):
         await add_to_user_collection(self.target_id, self.offered_card)
 
         if self.coins_offered > 0:
-            await deduct_coins(self.user_id, self.coins_offered)
-            await give_coins(self.target_id, self.coins_offered)
+            await transfer_coins(self.user_id, self.target_id, self.coins_offered, TRADE_OFFER_TRANSFER)
 
         for item in self.children:
             item.disabled = True

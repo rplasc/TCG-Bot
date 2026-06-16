@@ -2,9 +2,11 @@ import random
 import aiosqlite
 from discord import Embed, Color, Interaction
 from src.database.db import (
-    register_user, add_to_user_collection, can_afford, deduct_coins,
-    give_coins, user_owns_card, update_xp_and_check_level, get_card
+    register_user, add_to_user_collection, can_afford,
+    user_owns_card, update_xp_and_check_level, get_card
 )
+from src.economy.service import award_coins, spend_coins
+from src.economy.config import SHOP_PACK_PURCHASE, SHOP_CARD_PURCHASE, SHOP_DUPLICATE_REFUND
 
 RARITY_POOL = {
     "common": 70,
@@ -83,7 +85,7 @@ async def handle_shop_purchase(interaction: Interaction, user_id: int, pack: dic
         await interaction.response.send_message("❌ Not enough coins!", ephemeral=True)
         return
 
-    await deduct_coins(user_id, pack["cost"])
+    await spend_coins(user_id, pack["cost"], SHOP_PACK_PURCHASE, {"pack": pack.get("label")})
 
     pulled_cards = []
     total_xp = 0
@@ -102,7 +104,7 @@ async def handle_shop_purchase(interaction: Interaction, user_id: int, pack: dic
         emoji = RARITY_EMOJIS.get(rarity, "")
 
         if await user_owns_card(user_id, card_id):
-            await give_coins(user_id, coins)
+            await award_coins(user_id, coins, SHOP_DUPLICATE_REFUND, {"card_id": card_id, "rarity": rarity})
             total_xp += xp_reward
             footer_notes.append(f"{emoji} {name} (dupe) → +{coins} coins, +{xp_reward} XP")
         else:
@@ -156,7 +158,7 @@ async def handle_card_purchase(interaction: Interaction, card_id: int):
         await interaction.response.send_message("⚠️ You already own this card!", ephemeral=True)
         return
 
-    await deduct_coins(user_id, price)
+    await spend_coins(user_id, price, SHOP_CARD_PURCHASE, {"card_id": card_id, "rarity": rarity})
     await add_to_user_collection(user_id, card_id)
     rarity = card[2].lower()
     xp_reward = RARITY_XP.get(rarity, 0)
