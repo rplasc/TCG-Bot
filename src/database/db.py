@@ -297,6 +297,58 @@ async def add_reward_budget(user_id, date, category, amount):
         )
         await db.commit()
 
+async def get_recent_ledger(user_id, limit=10):
+    """Most recent ledger entries for a user: (amount, balance_after, source, created_at)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """
+            SELECT amount, balance_after, source, created_at FROM currency_ledger
+            WHERE user_id = ? ORDER BY id DESC LIMIT ?
+            """,
+            (user_id, limit),
+        )
+        return await cursor.fetchall()
+
+async def get_ledger_source_totals(user_id=None):
+    """Per-source totals: (source, total_amount, entry_count). Global if user_id is None."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if user_id is None:
+            cursor = await db.execute(
+                "SELECT source, SUM(amount), COUNT(*) FROM currency_ledger GROUP BY source ORDER BY SUM(amount)"
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT source, SUM(amount), COUNT(*) FROM currency_ledger WHERE user_id = ? GROUP BY source ORDER BY SUM(amount)",
+                (user_id,),
+            )
+        return await cursor.fetchall()
+
+async def get_economy_totals(user_id=None):
+    """Return (coins_created, coins_destroyed) where destroyed is a positive number."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        if user_id is None:
+            cursor = await db.execute(
+                "SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount END),0), "
+                "COALESCE(SUM(CASE WHEN amount < 0 THEN amount END),0) FROM currency_ledger"
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT COALESCE(SUM(CASE WHEN amount > 0 THEN amount END),0), "
+                "COALESCE(SUM(CASE WHEN amount < 0 THEN amount END),0) FROM currency_ledger WHERE user_id = ?",
+                (user_id,),
+            )
+        created, destroyed = await cursor.fetchone()
+        return created, -destroyed
+
+async def get_user_budgets(user_id, date):
+    """Daily budget rows for a user on a date: (category, amount_earned)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT category, amount_earned FROM daily_reward_budgets WHERE user_id = ? AND date = ? ORDER BY category",
+            (user_id, date),
+        )
+        return await cursor.fetchall()
+
 async def _insert_ledger_tx(db, user_id, amount, balance_after, source, source_id=None, metadata_json=None):
     """Write a ledger row using an already-open transaction (no commit)."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()

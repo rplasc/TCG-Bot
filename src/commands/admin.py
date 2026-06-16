@@ -1,10 +1,72 @@
-from discord import Interaction, Embed, Color
-from src.database.db import add_card, get_card_by_name, delete_card_by_name, update_card_by_name, create_collection, delete_collection_by_name
+from discord import Interaction, Embed, Color, Member
+from src.database.db import (
+    add_card, get_card_by_name, delete_card_by_name, update_card_by_name,
+    create_collection, delete_collection_by_name,
+    get_balance, get_recent_ledger, get_ledger_source_totals, get_economy_totals, get_user_budgets,
+)
 from src.aclient import client
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView
+from src.utils.time import get_current_date_str
 
 RARITIES = ["common", "uncommon", "rare", "epic", "legendary"]
+
+
+def _fmt_amount(n: int) -> str:
+    return f"+{n:,}" if n >= 0 else f"{n:,}"
+
+
+@client.tree.command(name="economy_report", description="View currency ledger and reward-budget data")
+@has_role("ChopperDevTeam")
+async def economy_report_command(interaction: Interaction, user: Member = None):
+    if user is None:
+        # Global economy overview.
+        created, destroyed = await get_economy_totals()
+        net = created - destroyed
+        embed = Embed(title="📊 Economy Report — Global", color=Color.gold())
+        embed.add_field(
+            name="Coin Flow (all-time, ledgered)",
+            value=(f"🟢 Created: **{created:,}**\n"
+                   f"🔴 Destroyed: **{destroyed:,}**\n"
+                   f"⚖️ Net: **{_fmt_amount(net)}**"),
+            inline=False,
+        )
+        totals = await get_ledger_source_totals()
+        if totals:
+            lines = [f"`{_fmt_amount(total):>10}` · {src} ({count})" for src, total, count in totals]
+            embed.add_field(name="By Source (net · count)", value="\n".join(lines)[:1024], inline=False)
+        else:
+            embed.add_field(name="By Source", value="No ledger entries yet.", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    # Per-user report.
+    balance = await get_balance(user.id)
+    created, destroyed = await get_economy_totals(user.id)
+    embed = Embed(title=f"📊 Economy Report — {user.display_name}", color=Color.blue())
+    embed.add_field(name="💰 Balance", value=f"{balance:,}", inline=True)
+    embed.add_field(name="🟢 Earned", value=f"{created:,}", inline=True)
+    embed.add_field(name="🔴 Spent", value=f"{destroyed:,}", inline=True)
+
+    budgets = await get_user_budgets(user.id, get_current_date_str())
+    if budgets:
+        embed.add_field(
+            name="Today's Reward Budget",
+            value="\n".join(f"{cat}: **{amt:,}**" for cat, amt in budgets),
+            inline=False,
+        )
+
+    recent = await get_recent_ledger(user.id, limit=12)
+    if recent:
+        lines = []
+        for amount, balance_after, source, created_at in recent:
+            ts = created_at[5:16].replace("T", " ") if created_at else ""
+            lines.append(f"`{_fmt_amount(amount):>8}` {source} → {balance_after:,}  _{ts}_")
+        embed.add_field(name="Recent Ledger", value="\n".join(lines)[:1024], inline=False)
+    else:
+        embed.add_field(name="Recent Ledger", value="No ledger entries yet.", inline=False)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.tree.command(name="add_card", description="Add card to database")
 @has_role("ChopperDevTeam")
