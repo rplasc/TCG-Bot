@@ -10,6 +10,7 @@ from src.models.collections import COLLECTIONS_TABLE
 from src.models.daily import DAILY_TABLE
 from src.models.progress import COLLECTION_REWARDS_TABLE
 from src.models.shop import DAILY_SHOP_TABLE
+from src.models.casino import CASINO_STATS_TABLE
 
 from src.utils.ranks import calculate_user_rank
 from src.utils.levels import calculate_level
@@ -29,6 +30,7 @@ async def init_db():
         await db.execute(DAILY_TABLE)
         await db.execute(COLLECTION_REWARDS_TABLE)
         await db.execute(DAILY_SHOP_TABLE)
+        await db.execute(CASINO_STATS_TABLE)
         await db.commit()
 
 # In-memory cache
@@ -176,6 +178,47 @@ async def give_coins(user_id, amount):
 async def can_afford(user_id: int, cost: int) -> bool:
     balance = await get_balance(user_id)
     return balance is not None and balance >= cost
+
+async def update_casino_stats(
+    user_id: int,
+    *,
+    wager: int = 0,
+    payout: int = 0,
+    blackjack_win: bool = False,
+    slot_jackpot: bool = False,
+    roulette_win: bool = False,
+):
+    net = payout - wager
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO casino_stats (user_id, games_played, coins_wagered, coins_paid_out, biggest_win,
+                blackjack_wins, slot_jackpots, roulette_wins, updated_at)
+            VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                games_played    = games_played + 1,
+                coins_wagered   = coins_wagered + excluded.coins_wagered,
+                coins_paid_out  = coins_paid_out + excluded.coins_paid_out,
+                biggest_win     = MAX(biggest_win, excluded.biggest_win),
+                blackjack_wins  = blackjack_wins + excluded.blackjack_wins,
+                slot_jackpots   = slot_jackpots + excluded.slot_jackpots,
+                roulette_wins   = roulette_wins + excluded.roulette_wins,
+                updated_at      = excluded.updated_at
+            """,
+            (
+                user_id,
+                wager,
+                payout,
+                max(net, 0),
+                int(blackjack_win),
+                int(slot_jackpot),
+                int(roulette_win),
+                now,
+            ),
+        )
+        await db.commit()
+
 
 async def deduct_coins(user_id: int, cost: int) -> bool:
     if await can_afford(user_id, cost):
