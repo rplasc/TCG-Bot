@@ -11,6 +11,7 @@ from src.models.daily import DAILY_TABLE
 from src.models.progress import COLLECTION_REWARDS_TABLE
 from src.models.shop import DAILY_SHOP_TABLE
 from src.models.casino import CASINO_STATS_TABLE
+from src.models.economy import CURRENCY_LEDGER_TABLE
 
 from src.utils.ranks import calculate_user_rank
 from src.utils.levels import calculate_level
@@ -31,6 +32,7 @@ async def init_db():
         await db.execute(COLLECTION_REWARDS_TABLE)
         await db.execute(DAILY_SHOP_TABLE)
         await db.execute(CASINO_STATS_TABLE)
+        await db.execute(CURRENCY_LEDGER_TABLE)
         await db.commit()
 
 # In-memory cache
@@ -243,6 +245,25 @@ async def get_xp(user_id):
         cursor = await db.execute("SELECT xp FROM users WHERE id = ?", (user_id,))
         row = await cursor.fetchone()
         return row[0] if row else 0
+
+async def get_level(user_id) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT level FROM users WHERE id = ?", (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def insert_ledger_entry(user_id, amount, balance_after, source, source_id=None, metadata_json=None):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO currency_ledger
+                (user_id, amount, balance_after, source, source_id, metadata_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, amount, balance_after, source, source_id, metadata_json, now),
+        )
+        await db.commit()
 
 async def update_xp_and_check_level(user_id: int, xp_gain: int):
     async with aiosqlite.connect(DB_PATH) as db:

@@ -1,6 +1,8 @@
 import random
 from discord import Interaction, ButtonStyle, ui, Embed, Color
-from src.database.db import deduct_coins, give_coins, get_balance
+from src.database.db import get_balance
+from src.economy.service import award_coins, spend_coins
+from src.economy.config import CASINO_WAGER, CASINO_PAYOUT
 from src.casino.wagers import validate_wager
 from src.casino.rewards import CasinoResult, build_result_footer
 from src.casino.events import emit_casino_event
@@ -32,7 +34,7 @@ async def _resolve_and_respond(
 ):
     modifiers = await get_active_casino_modifiers(user_id, game="roulette")
 
-    await deduct_coins(user_id, wager)
+    await spend_coins(user_id, wager, CASINO_WAGER, {"game": "roulette", "bet_type": bet_type})
     number, color = _spin()
 
     won = winning_condition(number, color)
@@ -49,7 +51,7 @@ async def _resolve_and_respond(
         outcome = "loss"
 
     if payout > 0:
-        await give_coins(user_id, payout)
+        await award_coins(user_id, payout, CASINO_PAYOUT, {"game": "roulette", "outcome": outcome})
 
     net = payout - wager
     base_result = CasinoResult(
@@ -90,7 +92,7 @@ async def _resolve_and_respond(
 
 
 class RouletteWagerModal(ui.Modal, title="Roulette – Place Wager"):
-    amount = ui.TextInput(label="Wager amount", placeholder="5–500", required=True)
+    amount = ui.TextInput(label="Wager amount", placeholder="e.g. 100", required=True)
 
     def __init__(self, bet_type: str, bet_display: str, winning_condition, exact_number: int | None = None):
         super().__init__()
@@ -117,7 +119,7 @@ class RouletteWagerModal(ui.Modal, title="Roulette – Place Wager"):
 
 class ExactNumberModal(ui.Modal, title="Roulette – Exact Number"):
     number = ui.TextInput(label="Number (0–36)", placeholder="e.g. 17", required=True)
-    amount = ui.TextInput(label="Wager amount", placeholder="5–500", required=True)
+    amount = ui.TextInput(label="Wager amount", placeholder="e.g. 100", required=True)
 
     async def on_submit(self, interaction: Interaction):
         try:

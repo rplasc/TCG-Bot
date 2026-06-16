@@ -1,9 +1,12 @@
 import random
 import asyncio
 from discord import Interaction, Embed, Color, ui, ButtonStyle
-from src.database.db import deduct_coins, give_coins, register_user, user_owns_card, add_to_user_collection, get_balance
+from src.database.db import register_user, user_owns_card, add_to_user_collection, get_balance
+from src.economy.service import award_coins, spend_coins
+from src.economy.config import CASINO_WAGER, CASINO_PAYOUT
 from src.shop.logic import draw_card, RARITY_EMOJIS
 from src.casino.types import SlotSession
+from src.casino.wagers import max_wager_for
 from src.casino.rewards import CasinoResult, build_result_footer
 from src.casino.events import emit_casino_event
 from src.casino.modifiers import get_active_casino_modifiers, apply_casino_modifiers
@@ -48,7 +51,7 @@ async def run_slot_spin(interaction: Interaction, session: SlotSession, edit: bo
 
     modifiers = await get_active_casino_modifiers(user_id, game="slots")
 
-    await deduct_coins(user_id, session.wager)
+    await spend_coins(user_id, session.wager, CASINO_WAGER, {"game": "slots"})
 
     fake_embed = Embed(title="🎰 Slot Machine", description="Spinning...", color=Color.dark_gray())
     fake_embed.add_field(name="Spin", value="🔄 | 🔄 | 🔄", inline=False)
@@ -69,7 +72,7 @@ async def run_slot_spin(interaction: Interaction, session: SlotSession, edit: bo
     card_id = None
 
     if payout > 0:
-        await give_coins(user_id, payout)
+        await award_coins(user_id, payout, CASINO_PAYOUT, {"game": "slots", "outcome": outcome_key or "loss"})
 
     card_message = None
     if outcome_key == "jackpot":
@@ -155,9 +158,17 @@ class SlotView(ui.View):
 
 
 class WagerSelectView(ui.View):
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, max_wager: int):
         super().__init__(timeout=30)
         self.user_id = user_id
+        self.max_wager = max_wager
+        # Disable any wager button whose amount (leading number in its label)
+        # exceeds the player's level cap.
+        for child in self.children:
+            label = getattr(child, "label", "") or ""
+            lead = label.split(" ", 1)[0]
+            if lead.isdigit() and int(lead) > max_wager:
+                child.disabled = True
 
     def _check(self, interaction: Interaction) -> bool:
         return interaction.user.id == self.user_id
@@ -165,6 +176,11 @@ class WagerSelectView(ui.View):
     async def _start(self, interaction: Interaction, wager: int):
         if not self._check(interaction):
             await interaction.response.send_message("❌ Not your session.", ephemeral=True)
+            return
+        if wager > self.max_wager:
+            await interaction.response.send_message(
+                f"❌ Your max wager is {self.max_wager} coins at your level.", ephemeral=True
+            )
             return
         self.stop()
         session = SlotSession(user_id=self.user_id, wager=wager)
@@ -184,9 +200,10 @@ class WagerSelectView(ui.View):
 
 
 async def play_slots(interaction: Interaction):
+    max_wager = await max_wager_for(interaction.user.id, game="slots")
     embed = Embed(title="🎰 Slot Machine – Choose Wager", color=Color.dark_gold())
     embed.description = "Pick your stake to start spinning."
     embed.add_field(name="Outcome", value=_PAYTABLE_OUTCOMES, inline=True)
     embed.add_field(name="5🪙 · 25🪙 · 100🪙", value=_PAYTABLE_PAYOUTS, inline=True)
-    view = WagerSelectView(user_id=interaction.user.id)
+    view = WagerSelectView(user_id=interaction.user.id, max_wager=max_wager)
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

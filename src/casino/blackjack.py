@@ -1,6 +1,8 @@
 import math
 from discord import ui, Interaction, Embed, Color, ButtonStyle
-from src.database.db import register_user, can_afford, deduct_coins, give_coins, get_balance
+from src.database.db import register_user, can_afford, get_balance
+from src.economy.service import award_coins, spend_coins
+from src.economy.config import CASINO_WAGER, CASINO_PAYOUT
 from src.casino.logic import draw_card, hand_total
 from src.casino.types import BlackjackSession
 from src.casino.wagers import validate_wager
@@ -42,13 +44,13 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
 
     if player_natural and dealer_natural:
         payout = session.bet
-        await give_coins(session.user_id, payout)
+        await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "push"})
         outcome = "push"
         result_text = "⚖️ Both have Blackjack — push! Wager returned."
         public_msg = None
     elif player_natural:
         payout = session.bet + math.floor(session.bet * 1.5)
-        await give_coins(session.user_id, payout)
+        await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "blackjack"})
         outcome = "blackjack"
         result_text = f"🃏 Blackjack! You win {payout} coins (3:2)!"
         public_msg = (
@@ -65,13 +67,13 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
 
         if dealer_total > 21 or player_total > dealer_total:
             payout = effective_bet * 2
-            await give_coins(session.user_id, payout)
+            await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "win"})
             outcome = "win"
             result_text = f"🎉 You win! (+{effective_bet} coins)"
             public_msg = None
         elif dealer_total == player_total:
             payout = effective_bet
-            await give_coins(session.user_id, payout)
+            await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "push"})
             outcome = "push"
             result_text = "⚖️ Push! Wager returned."
             public_msg = None
@@ -183,7 +185,7 @@ class BlackjackView(ui.View):
             await interaction.response.send_message("❌ Not enough coins to double down.", ephemeral=True)
             return
 
-        await deduct_coins(interaction.user.id, session.bet)
+        await spend_coins(interaction.user.id, session.bet, CASINO_WAGER, {"game": "blackjack", "action": "double_down"})
         session.doubled_down = True
         session.player_hand.append(draw_card())
         session.finished = True
@@ -228,14 +230,14 @@ async def start_blackjack(interaction: Interaction):
     await register_user(user_id, interaction.user.name)
 
     class WagerModal(ui.Modal, title="Blackjack – Place Wager"):
-        wager = ui.TextInput(label="Enter wager (5–500)", placeholder="e.g. 100", required=True)
+        wager = ui.TextInput(label="Enter wager", placeholder="e.g. 100", required=True)
 
         async def on_submit(self, interaction: Interaction):
             ok, result = await validate_wager(user_id, self.wager.value)
             if not ok:
                 await interaction.response.send_message(result, ephemeral=True)
                 return
-            await deduct_coins(user_id, result)
+            await spend_coins(user_id, result, CASINO_WAGER, {"game": "blackjack", "action": "wager"})
             await play_blackjack(interaction, result)
 
     await interaction.response.send_modal(WagerModal())
