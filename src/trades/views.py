@@ -3,8 +3,8 @@ from src.database.db import (
     remove_from_user_collection, add_to_user_collection,
     can_afford, get_card
 )
-from src.economy.service import transfer_coins
-from src.economy.config import TRADE_OFFER_TRANSFER
+from src.economy.service import transfer_coins, spend_coins
+from src.economy.config import TRADE_OFFER_TRANSFER, TRADE_FEE, TRADE_FEE_PERCENT, trade_fee_for
 
 class TradeView(ui.View):
     def __init__(self, user_id, target_id, user_cards, target_cards):
@@ -81,8 +81,11 @@ class SubmitTradeButton(ui.Button):
             await interaction.response.send_message("❌ Invalid coin offer.", ephemeral=True)
             return
 
-        if pv.coins_offered > 0 and not await can_afford(pv.user_id, pv.coins_offered):
-            await interaction.response.send_message("❌ You don't have enough coins.", ephemeral=True)
+        fee = trade_fee_for(pv.coins_offered)
+        if pv.coins_offered > 0 and not await can_afford(pv.user_id, pv.coins_offered + fee):
+            await interaction.response.send_message(
+                f"❌ You don't have enough coins (offer {pv.coins_offered} + {fee} fee).", ephemeral=True
+            )
             return
 
         offered_card = await get_card(pv.selected_user_card)
@@ -90,16 +93,22 @@ class SubmitTradeButton(ui.Button):
 
         offer_text = f"🃏 {offered_card[1]} [{offered_card[2]}]"
         request_text = f"🃏 {requested_card[1]} [{requested_card[2]}]"
-        
+
         if pv.coins_offered:
             offer_text += f"\n💰 {pv.coins_offered} coins"
-        
+
         # Send the confirmation to target user
         embed = Embed(title="🔁 Trade Request", color=Color.blue())
         embed.add_field(name="From", value=f"<@{pv.user_id}>", inline=True)
         embed.add_field(name="To", value=f"<@{pv.target_id}>", inline=True)
         embed.add_field(name="They offer", value=offer_text, inline=False)
         embed.add_field(name="They want", value=request_text, inline=False)
+        if fee > 0:
+            embed.add_field(
+                name="Trade fee",
+                value=f"💸 {fee} coins ({int(TRADE_FEE_PERCENT * 100)}%) — paid by <@{pv.user_id}>",
+                inline=False,
+            )
 
         view = ConfirmTradeView(pv.user_id, pv.target_id, pv.selected_user_card, pv.selected_target_card, pv.coins_offered)
         await interaction.channel.send(content=f"<@{pv.target_id}>", embed=embed, view=view)
@@ -119,6 +128,18 @@ class ConfirmTradeView(ui.View):
             await interaction.response.send_message("❌ Only the trade recipient can accept.", ephemeral=True)
             return
 
+        fee = trade_fee_for(self.coins_offered)
+        # Re-check at accept time — the initiator's balance may have changed since submit.
+        if self.coins_offered > 0 and not await can_afford(self.user_id, self.coins_offered + fee):
+            for item in self.children:
+                item.disabled = True
+            await interaction.message.edit(view=self)
+            await interaction.response.send_message(
+                f"❌ <@{self.user_id}> can no longer afford the {self.coins_offered} coins + {fee} fee. Trade cancelled.",
+                ephemeral=False,
+            )
+            return
+
         await remove_from_user_collection(self.user_id, self.offered_card)
         await remove_from_user_collection(self.target_id, self.requested_card)
         await add_to_user_collection(self.user_id, self.requested_card)
@@ -126,12 +147,17 @@ class ConfirmTradeView(ui.View):
 
         if self.coins_offered > 0:
             await transfer_coins(self.user_id, self.target_id, self.coins_offered, TRADE_OFFER_TRANSFER)
+            if fee > 0:
+                await spend_coins(self.user_id, fee, TRADE_FEE, {"coins_offered": self.coins_offered, "to": self.target_id})
 
         for item in self.children:
             item.disabled = True
         await interaction.message.edit(view=self)
 
-        await interaction.response.send_message("✅ Trade completed!", ephemeral=False)
+        completion = "✅ Trade completed!"
+        if fee > 0:
+            completion += f" (💸 {fee} coin fee charged to <@{self.user_id}>)"
+        await interaction.response.send_message(completion, ephemeral=False)
 
     @ui.button(label="❌ Decline", style=ButtonStyle.danger)
     async def decline(self, interaction: Interaction, button: ui.Button):

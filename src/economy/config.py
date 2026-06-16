@@ -46,6 +46,7 @@ LEVEL_UP_REWARD = "level.up_reward"
 CASINO_WAGER = "casino.wager"
 CASINO_PAYOUT = "casino.payout"
 TRADE_OFFER_TRANSFER = "trade.offer_transfer"
+TRADE_FEE = "trade.fee"
 ADMIN_ADJUSTMENT = "admin.adjustment"
 EVENT_REWARD = "event.reward"
 CHALLENGE_REWARD = "challenge.reward"
@@ -76,6 +77,19 @@ REPEATABLE_SOFT_CAP_BANDS = [
     (1.5, 0.5),
     (None, 0.25),
 ]
+
+
+# --- Trade fee (coin sink on player-to-player coin transfers) ---
+
+# Fee charged to the trade initiator as a fraction of the coins they offer.
+TRADE_FEE_PERCENT = 0.05
+
+
+def trade_fee_for(coins_offered: int) -> int:
+    """Coin fee for a trade offering `coins_offered` coins (floored, 0 if none)."""
+    if coins_offered <= 0:
+        return 0
+    return int(coins_offered * TRADE_FEE_PERCENT)
 
 
 def tier_for_level(level: int) -> str:
