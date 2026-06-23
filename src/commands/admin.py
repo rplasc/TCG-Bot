@@ -3,6 +3,7 @@ from src.database.db import (
     add_card, get_card_by_name, delete_card_by_name, update_card_by_name,
     create_collection, delete_collection_by_name,
     get_balance, get_recent_ledger, get_ledger_source_totals, get_economy_totals, get_user_budgets,
+    reset_database,
 )
 from src.aclient import client
 from src.utils.permissions import has_role
@@ -184,6 +185,43 @@ async def delete_collection_command(interaction: Interaction, name: str):
         action_fn=perform_deletion,
         success_message=f"✅ Collection '{name}' has been deleted.",
         failure_message=f"❌ Collection '{name}' was not found or couldn't be deleted.",
+    )
+
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+@client.tree.command(name="reset", description="Reset the database (wipes all player data)")
+@has_role("ChopperDevTeam")
+async def reset_command(interaction: Interaction, keep_cards: bool = True):
+    if keep_cards:
+        scope = "All player data (balances, collections, streaks, casino stats, ledger) will be wiped. **Card and collection definitions will be kept.**"
+    else:
+        scope = "**Everything** will be wiped — all player data **and** every card and collection definition."
+
+    embed = Embed(
+        title="⚠️ Confirm Database Reset",
+        description=f"{scope}\n\nThis cannot be undone. Are you sure?",
+        color=Color.red(),
+    )
+
+    async def perform_reset(_: Interaction) -> bool:
+        try:
+            await reset_database(keep_cards=keep_cards)
+            return True
+        except Exception as e:
+            print(f"Error resetting database: {e}")
+            return False
+
+    success_message = (
+        "✅ Database reset. Player data wiped; cards kept."
+        if keep_cards
+        else "✅ Database reset. Player data, cards, and collections wiped."
+    )
+
+    view = ConfirmActionView(
+        user_id=interaction.user.id,
+        action_fn=perform_reset,
+        success_message=success_message,
+        failure_message="❌ Database reset failed. Check the logs.",
     )
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

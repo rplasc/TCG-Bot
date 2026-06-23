@@ -56,6 +56,46 @@ async def set_last_announced_event_key(key: str) -> None:
         )
         await db.commit()
 
+
+# Player/progress tables wiped on every reset.
+_RESET_PLAYER_TABLES = [
+    "user_cards",
+    "users",
+    "daily_cooldowns",
+    "daily_shop",
+    "collection_rewards",
+    "casino_stats",
+    "currency_ledger",
+    "daily_reward_budgets",
+    "event_state",
+]
+# Card-content tables wiped only when not keeping cards.
+_RESET_CARD_TABLES = ["cards", "collections"]
+
+
+async def reset_database(keep_cards: bool = True) -> None:
+    """Wipe all player and progress data. When ``keep_cards`` is False, also
+    remove card and collection definitions. Schema is preserved (DELETE, not DROP)."""
+    tables = list(_RESET_PLAYER_TABLES)
+    if not keep_cards:
+        tables += _RESET_CARD_TABLES
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        try:
+            await db.execute("BEGIN")
+            for table in tables:
+                await db.execute(f"DELETE FROM {table}")
+                # Reset AUTOINCREMENT counters where present (ignored if table has none).
+                await db.execute("DELETE FROM sqlite_sequence WHERE name = ?", (table,))
+            await db.commit()
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
+
+    # Drop the in-memory daily-shop cache so it regenerates on next access.
+    _daily_shop_cache["key"] = None
+    _daily_shop_cache["cards"] = []
+
 # In-memory cache
 _daily_shop_cache = {
     "key": None,
