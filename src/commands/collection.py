@@ -1,4 +1,4 @@
-from discord import Interaction, Embed, Color, app_commands
+from discord import Interaction, Embed, Color, app_commands, ui, ButtonStyle
 from src.aclient import client
 from src.database.db import (get_user_collection, get_cards_by_collection, get_card_ids_in_collection,
                         get_user_owned_card_ids, get_missing_cards_in_collection,
@@ -88,6 +88,7 @@ async def collection_progress(interaction: Interaction, collection: str):
     )
     embed.add_field(name="Progress", value=progress_bar(owned, total), inline=False)
 
+    missing_view = None
     if owned == total:
         if not await has_claimed_collection_reward(user_id, collection_id):
             await claim_collection_reward(user_id, collection_id)
@@ -98,20 +99,15 @@ async def collection_progress(interaction: Interaction, collection: str):
                 embed.add_field(name="🆙 Level Up!", value=f"You reached Level {new_level} and earned +{coins_awarded} coins!", inline=False)
         else:
             embed.add_field(name="🎁 Reward", value="You've already claimed the reward for this collection.", inline=False)
+    else:
+        # Offer the uncollected-cards list via a button instead of a separate command.
+        missing_view = MissingCardsView(user_id, collection)
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(embed=embed, view=missing_view)
 
-@client.tree.command(name="my_missing_cards", description="View uncollected cards from a collection")
-@app_commands.autocomplete(collection=collection_autocomplete)
-async def my_missing_cards(interaction: Interaction, collection: str):
-    user_id = interaction.user.id
-    missing = await get_missing_cards_in_collection(user_id, collection)
 
-    if not missing:
-        await interaction.response.send_message(f"🎉 You own all cards in **{collection.title()}**!", ephemeral=True)
-        return
-
-    # Group the missing names into newline lists so each page reads as a clean list.
+def build_missing_cards_view(user_id: int, collection: str, missing: list[str]) -> FieldPaginator:
+    """Paginated list of a collection's uncollected card names."""
     chunk = 20
     entries = [
         (
@@ -120,12 +116,36 @@ async def my_missing_cards(interaction: Interaction, collection: str):
         )
         for i in range(0, len(missing), chunk)
     ]
-    view = FieldPaginator(
-        user_id=interaction.user.id,
+    return FieldPaginator(
+        user_id=user_id,
         title=f"📋 Missing Cards in {collection.title()}",
         entries=entries,
         color=Color.red(),
         per_page=1,
         footer_suffix=f"{len(missing)} missing",
     )
-    await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
+
+
+class MissingCardsView(ui.View):
+    """A single button on /collection_progress that reveals the uncollected cards."""
+
+    def __init__(self, user_id: int, collection: str):
+        super().__init__(timeout=120)
+        self.user_id = user_id
+        self.collection = collection
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("This isn't your menu.", ephemeral=True)
+            return False
+        return True
+
+    @ui.button(label="📋 Show missing cards", style=ButtonStyle.secondary)
+    async def show_missing(self, interaction: Interaction, button: ui.Button):
+        missing = await get_missing_cards_in_collection(self.user_id, self.collection)
+        if not missing:
+            await interaction.response.send_message(
+                f"🎉 You own all cards in **{self.collection.title()}**!", ephemeral=True)
+            return
+        view = build_missing_cards_view(self.user_id, self.collection, missing)
+        await interaction.response.send_message(embed=view.get_embed(), view=view, ephemeral=True)
