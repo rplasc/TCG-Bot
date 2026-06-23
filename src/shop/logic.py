@@ -7,6 +7,7 @@ from src.database.db import (
 )
 from src.economy.service import award_coins, spend_coins
 from src.economy.config import SHOP_PACK_PURCHASE, SHOP_CARD_PURCHASE, SHOP_DUPLICATE_REFUND
+from src.events.service import drop_pool_override, shop_discount
 
 RARITY_POOL = {
     "common": 70,
@@ -64,7 +65,7 @@ SHOP_PACKS = {
 }
 
 async def draw_card(pool=None):
-    pool = pool or RARITY_POOL
+    pool = drop_pool_override(pool or RARITY_POOL)
     rarities = list(pool.keys())
     weights = list(pool.values())
     chosen_rarity = random.choices(rarities, weights=weights)[0]
@@ -81,11 +82,14 @@ async def handle_shop_purchase(interaction: Interaction, user_id: int, pack: dic
     username = interaction.user.name
     await register_user(user_id, username)
 
-    if not await can_afford(user_id, pack["cost"]):
+    discount = shop_discount()
+    cost = int(round(pack["cost"] * (1 - discount)))
+
+    if not await can_afford(user_id, cost):
         await interaction.response.send_message("❌ Not enough coins!", ephemeral=True)
         return
 
-    await spend_coins(user_id, pack["cost"], SHOP_PACK_PURCHASE, {"pack": pack.get("label")})
+    await spend_coins(user_id, cost, SHOP_PACK_PURCHASE, {"pack": pack.get("label"), "discount": discount})
 
     pulled_cards = []
     total_xp = 0
@@ -118,6 +122,8 @@ async def handle_shop_purchase(interaction: Interaction, user_id: int, pack: dic
 
     embed_color = Color.gold() if legendary_pulled else Color.dark_teal()
     embed = Embed(title=f"🎒 {pack['label']} Opened!", color=embed_color)
+    if discount > 0:
+        embed.add_field(name="🏷️ Event Discount", value=f"{int(discount * 100)}% off → paid {cost} coins", inline=False)
 
     for card in pulled_cards:
         emoji = RARITY_EMOJIS.get(card[2].lower(), "")
@@ -148,7 +154,8 @@ async def handle_card_purchase(interaction: Interaction, card_id: int):
         return
 
     rarity = card[2].lower()
-    price = CARD_SHOP_PRICES.get(rarity, 50)
+    discount = shop_discount()
+    price = int(round(CARD_SHOP_PRICES.get(rarity, 50) * (1 - discount)))
 
     if not await can_afford(user_id, price):
         await interaction.response.send_message("❌ Not enough coins!", ephemeral=True)
@@ -158,7 +165,7 @@ async def handle_card_purchase(interaction: Interaction, card_id: int):
         await interaction.response.send_message("⚠️ You already own this card!", ephemeral=True)
         return
 
-    await spend_coins(user_id, price, SHOP_CARD_PURCHASE, {"card_id": card_id, "rarity": rarity})
+    await spend_coins(user_id, price, SHOP_CARD_PURCHASE, {"card_id": card_id, "rarity": rarity, "discount": discount})
     await add_to_user_collection(user_id, card_id)
     rarity = card[2].lower()
     xp_reward = RARITY_XP.get(rarity, 0)

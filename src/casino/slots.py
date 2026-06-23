@@ -10,6 +10,7 @@ from src.casino.wagers import max_wager_for
 from src.casino.rewards import CasinoResult, build_result_footer
 from src.casino.events import emit_casino_event
 from src.casino.modifiers import get_active_casino_modifiers, apply_casino_modifiers
+from src.events.service import casino_payout_multiplier
 
 SLOT_SYMBOLS = ["🍒", "🍋", "🍇", "🔔", "⭐", "💎"]
 JACKPOT = "💎"
@@ -68,6 +69,8 @@ async def run_slot_spin(interaction: Interaction, session: SlotSession, edit: bo
 
     paytable = _PAYTABLE[session.wager]
     payout = paytable.get(outcome_key, 0)
+    if payout > 0:
+        payout = int(round(payout * casino_payout_multiplier("slots")))
     card_awarded = False
     card_id = None
 

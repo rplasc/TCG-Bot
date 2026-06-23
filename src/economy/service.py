@@ -18,6 +18,7 @@ from src.database.db import (
     add_reward_budget,
 )
 from src.utils.time import get_current_date_str
+from src.events.service import wager_cap_multiplier
 from src.economy.config import (
     CASINO_WAGER_CAPS,
     DAILY_REPEATABLE_COIN_BUDGETS,
@@ -77,9 +78,11 @@ async def get_player_economy_tier(user_id: int) -> str:
 
 
 async def get_max_wager(user_id: int, game: str = "casino") -> int:
-    """Return the player's max casino wager based on their tier."""
+    """Return the player's max casino wager based on their tier, scaled by any
+    active event wager-cap boost (e.g. High Rollers Week)."""
     tier = await get_player_economy_tier(user_id)
-    return CASINO_WAGER_CAPS.get(tier, CASINO_WAGER_CAPS["new"])
+    base = CASINO_WAGER_CAPS.get(tier, CASINO_WAGER_CAPS["new"])
+    return int(base * wager_cap_multiplier(game))
 
 
 def _banded_grant(already: int, base: int, budget: int) -> int:

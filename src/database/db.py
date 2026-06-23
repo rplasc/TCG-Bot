@@ -12,11 +12,13 @@ from src.models.progress import COLLECTION_REWARDS_TABLE
 from src.models.shop import DAILY_SHOP_TABLE
 from src.models.casino import CASINO_STATS_TABLE
 from src.models.economy import CURRENCY_LEDGER_TABLE, DAILY_REWARD_BUDGETS_TABLE
+from src.models.events import EVENT_STATE_TABLE
 from src.economy.config import DAILY_CLAIM, DAILY_STREAK_BONUS, LEVEL_UP_REWARD
 
 from src.utils.ranks import calculate_user_rank
 from src.utils.levels import calculate_level
 from src.utils.time import get_shop_rotation_key, get_current_date_str,is_consecutive_day, is_same_day, get_streak_bonus
+from src.events.service import apply_xp, coin_multiplier
 
 DB_PATH = "data/cards.db"
 
@@ -35,6 +37,23 @@ async def init_db():
         await db.execute(CASINO_STATS_TABLE)
         await db.execute(CURRENCY_LEDGER_TABLE)
         await db.execute(DAILY_REWARD_BUDGETS_TABLE)
+        await db.execute(EVENT_STATE_TABLE)
+        await db.commit()
+
+
+async def get_last_announced_event_key() -> str | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT last_announced_key FROM event_state WHERE id = 1")
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def set_last_announced_event_key(key: str) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO event_state (id, last_announced_key) VALUES (1, ?)",
+            (key,),
+        )
         await db.commit()
 
 # In-memory cache
@@ -362,6 +381,8 @@ async def _insert_ledger_tx(db, user_id, amount, balance_after, source, source_i
     )
 
 async def update_xp_and_check_level(user_id: int, xp_gain: int):
+    # Apply any active event XP multiplier (no-op when no event is active).
+    xp_gain = apply_xp(xp_gain)
     async with aiosqlite.connect(DB_PATH) as db:
         try:
             # Start transaction
@@ -680,9 +701,10 @@ async def claim_daily_reward_with_streak(user_id: int) -> dict:
         if is_consecutive_day(last_claimed_date, current_date):
             new_streak = streak_info['current_streak'] + 1
         
-    # Calculate rewards
-    base_coins = 15
-    bonus_coins = get_streak_bonus(new_streak)
+    # Calculate rewards (scaled by any active event coin multiplier)
+    coin_mult = coin_multiplier()
+    base_coins = int(round(15 * coin_mult))
+    bonus_coins = int(round(get_streak_bonus(new_streak) * coin_mult))
     total_coins = base_coins + bonus_coins
     
     async with aiosqlite.connect(DB_PATH) as db:

@@ -9,6 +9,7 @@ from src.casino.wagers import validate_wager
 from src.casino.rewards import CasinoResult, build_result_footer
 from src.casino.events import emit_casino_event
 from src.casino.modifiers import get_active_casino_modifiers, apply_casino_modifiers
+from src.events.service import casino_payout_multiplier
 
 active_sessions: dict[int, BlackjackSession] = {}
 
@@ -38,6 +39,7 @@ def render_blackjack_embed(session: BlackjackSession, footer: str | None = None)
 
 async def resolve_blackjack(interaction: Interaction, session: BlackjackSession) -> tuple[str, str | None]:
     modifiers = await get_active_casino_modifiers(session.user_id, game="blackjack")
+    payout_mult = casino_payout_multiplier("blackjack")
 
     player_natural = _is_natural(session.player_hand)
     dealer_natural = _is_natural(session.dealer_hand)
@@ -49,7 +51,7 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
         result_text = "⚖️ Both have Blackjack — push! Wager returned."
         public_msg = None
     elif player_natural:
-        payout = session.bet + math.floor(session.bet * 1.5)
+        payout = int(round((session.bet + math.floor(session.bet * 1.5)) * payout_mult))
         await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "blackjack"})
         outcome = "blackjack"
         result_text = f"🃏 Blackjack! You win {payout} coins (3:2)!"
@@ -66,10 +68,10 @@ async def resolve_blackjack(interaction: Interaction, session: BlackjackSession)
         effective_bet = session.bet * 2 if session.doubled_down else session.bet
 
         if dealer_total > 21 or player_total > dealer_total:
-            payout = effective_bet * 2
+            payout = int(round(effective_bet * 2 * payout_mult))
             await award_coins(session.user_id, payout, CASINO_PAYOUT, {"game": "blackjack", "outcome": "win"})
             outcome = "win"
-            result_text = f"🎉 You win! (+{effective_bet} coins)"
+            result_text = f"🎉 You win! (+{payout - effective_bet} coins)"
             public_msg = None
         elif dealer_total == player_total:
             payout = effective_bet

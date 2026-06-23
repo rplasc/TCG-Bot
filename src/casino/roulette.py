@@ -7,6 +7,7 @@ from src.casino.wagers import validate_wager
 from src.casino.rewards import CasinoResult, build_result_footer
 from src.casino.events import emit_casino_event
 from src.casino.modifiers import get_active_casino_modifiers, apply_casino_modifiers
+from src.events.service import casino_payout_multiplier
 
 RED_NUMBERS = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
 BLACK_NUMBERS = {2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35}
@@ -51,6 +52,7 @@ async def _resolve_and_respond(
         outcome = "loss"
 
     if payout > 0:
+        payout = int(round(payout * casino_payout_multiplier("roulette")))
         await award_coins(user_id, payout, CASINO_PAYOUT, {"game": "roulette", "outcome": outcome})
 
     net = payout - wager
