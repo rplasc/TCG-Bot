@@ -39,6 +39,18 @@ def get_shop_rotation_key():
 
     return rotation_day.isoformat()
 
+def get_sports_rotation_key():
+    """Date key for the daily sports-betting match, rolling over at 8 AM PST."""
+    now = datetime.now(zoneinfo.ZoneInfo("America/Los_Angeles"))
+    rotation_hour = 8  # 8 AM PST
+
+    if now.hour < rotation_hour:
+        rotation_day = now.date() - timedelta(days=1)
+    else:
+        rotation_day = now.date()
+
+    return rotation_day.isoformat()
+
 def get_current_date_str() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 

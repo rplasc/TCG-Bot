@@ -13,6 +13,7 @@ from src.models.shop import DAILY_SHOP_TABLE
 from src.models.casino import CASINO_STATS_TABLE
 from src.models.economy import CURRENCY_LEDGER_TABLE, DAILY_REWARD_BUDGETS_TABLE
 from src.models.events import EVENT_STATE_TABLE
+from src.models.sports import SPORTS_MATCHES_TABLE, SPORTS_BETS_TABLE, SPORTS_BETS_INDEX
 from src.economy.config import DAILY_CLAIM, DAILY_STREAK_BONUS, LEVEL_UP_REWARD
 
 from src.utils.ranks import calculate_user_rank
@@ -38,6 +39,9 @@ async def init_db():
         await db.execute(CURRENCY_LEDGER_TABLE)
         await db.execute(DAILY_REWARD_BUDGETS_TABLE)
         await db.execute(EVENT_STATE_TABLE)
+        await db.execute(SPORTS_MATCHES_TABLE)
+        await db.execute(SPORTS_BETS_TABLE)
+        await db.execute(SPORTS_BETS_INDEX)
         await db.commit()
 
 
@@ -68,6 +72,8 @@ _RESET_PLAYER_TABLES = [
     "currency_ledger",
     "daily_reward_budgets",
     "event_state",
+    "sports_matches",
+    "sports_bets",
 ]
 # Card-content tables wiped only when not keeping cards.
 _RESET_CARD_TABLES = ["cards", "collections"]
@@ -279,6 +285,115 @@ async def update_casino_stats(
                 int(roulette_win),
                 now,
             ),
+        )
+        await db.commit()
+
+
+# --- Sports betting (pari-mutuel) ---
+
+_SPORTS_MATCH_COLS = (
+    "id, match_day, team_a, team_b, strength_a, strength_b, "
+    "seed_a, seed_b, status, winner, created_at, settled_at"
+)
+
+
+def _row_to_match(row) -> dict | None:
+    if not row:
+        return None
+    keys = [c.strip() for c in _SPORTS_MATCH_COLS.split(",")]
+    return dict(zip(keys, row))
+
+
+async def create_sports_match(match_day, team_a, team_b, strength_a, strength_b, seed_a, seed_b):
+    """Insert a match for ``match_day`` if one doesn't already exist (idempotent
+    via the UNIQUE(match_day) constraint)."""
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT OR IGNORE INTO sports_matches
+                (match_day, team_a, team_b, strength_a, strength_b, seed_a, seed_b,
+                 status, winner, created_at, settled_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'open', NULL, ?, NULL)
+            """,
+            (match_day, team_a, team_b, strength_a, strength_b, seed_a, seed_b, now),
+        )
+        await db.commit()
+
+
+async def get_match_by_day(match_day) -> dict | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            f"SELECT {_SPORTS_MATCH_COLS} FROM sports_matches WHERE match_day = ?",
+            (match_day,),
+        )
+        return _row_to_match(await cursor.fetchone())
+
+
+async def get_open_matches_before(day_key) -> list[dict]:
+    """Open matches whose match_day is strictly before ``day_key`` (i.e. due for
+    settlement)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            f"SELECT {_SPORTS_MATCH_COLS} FROM sports_matches "
+            "WHERE status = 'open' AND match_day < ? ORDER BY match_day ASC",
+            (day_key,),
+        )
+        return [_row_to_match(r) for r in await cursor.fetchall()]
+
+
+async def get_match_pools(match_id) -> dict:
+    """Real coin totals wagered per side: {'a': int, 'b': int}."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT side, COALESCE(SUM(amount), 0) FROM sports_bets "
+            "WHERE match_id = ? GROUP BY side",
+            (match_id,),
+        )
+        pools = {"a": 0, "b": 0}
+        for side, total in await cursor.fetchall():
+            pools[side] = total
+        return pools
+
+
+async def get_user_bet_side(match_id, user_id) -> str | None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT side FROM sports_bets WHERE match_id = ? AND user_id = ? LIMIT 1",
+            (match_id, user_id),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def insert_sports_bet(match_id, user_id, side, amount):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO sports_bets (match_id, user_id, side, amount, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (match_id, user_id, side, amount, now),
+        )
+        await db.commit()
+
+
+async def get_bets_for_match(match_id) -> list[tuple]:
+    """All bets for a match as (user_id, side, amount)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "SELECT user_id, side, amount FROM sports_bets WHERE match_id = ?",
+            (match_id,),
+        )
+        return await cursor.fetchall()
+
+
+async def mark_match_settled(match_id, winner):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE sports_matches SET status = 'settled', winner = ?, settled_at = ? "
+            "WHERE id = ?",
+            (winner, now, match_id),
         )
         await db.commit()
 

@@ -45,6 +45,9 @@ COMBAT_HUNT_BANK = "combat.hunt_bank"
 LEVEL_UP_REWARD = "level.up_reward"
 CASINO_WAGER = "casino.wager"
 CASINO_PAYOUT = "casino.payout"
+SPORTS_BET_WAGER = "sports.bet"
+SPORTS_PAYOUT = "sports.payout"
+SPORTS_REFUND = "sports.refund"
 TRADE_OFFER_TRANSFER = "trade.offer_transfer"
 TRADE_FEE = "trade.fee"
 ADMIN_ADJUSTMENT = "admin.adjustment"
@@ -83,6 +86,13 @@ REPEATABLE_SOFT_CAP_BANDS = [
 
 # Fee charged to the trade initiator as a fraction of the coins they offer.
 TRADE_FEE_PERCENT = 0.05
+
+
+# --- Sports betting (pari-mutuel) ---
+
+# House rake removed from the pool before paying winners (a coin sink). Realized
+# implicitly as coins that are never re-awarded, so no extra ledger row is needed.
+SPORTS_RAKE_PERCENT = 0.05
 
 
 def trade_fee_for(coins_offered: int) -> int:

@@ -7,6 +7,7 @@ from src.commands import general, leaderboard, packs, collection, codex, casino,
 from src.database.db import give_coins, register_user, init_db
 from src.combat.session_manager import session_manager
 from src.events.announcer import event_announcer
+from src.casino.sports_scheduler import sports_scheduler
 
 @client.event
 async def on_ready():
@@ -28,11 +29,13 @@ async def on_ready():
     
     session_manager.start_cleanup_task()
     event_announcer.start(client)
+    sports_scheduler.start(client)
 
 @client.event
 async def on_close():
     await session_manager.shutdown()
     await event_announcer.shutdown()
+    await sports_scheduler.shutdown()
 
 @client.event
 async def on_message(message: discord.Message):

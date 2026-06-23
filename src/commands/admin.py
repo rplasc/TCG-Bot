@@ -8,7 +8,10 @@ from src.database.db import (
 from src.aclient import client
 from src.utils.permissions import has_role
 from src.utils.confirmation import ConfirmActionView
-from src.utils.time import get_current_date_str
+from src.utils.time import get_current_date_str, get_sports_rotation_key
+from src.database.db import get_match_by_day
+from src.casino.sportsbook import settle_match
+from src.casino.sports_scheduler import _result_embed
 
 RARITIES = ["common", "uncommon", "rare", "epic", "legendary"]
 
@@ -225,3 +228,25 @@ async def reset_command(interaction: Interaction, keep_cards: bool = True):
     )
 
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+
+@client.tree.command(name="settle_sports", description="[Debug] Force-settle today's sports match now")
+@has_role("ChopperDevTeam")
+async def settle_sports_command(interaction: Interaction):
+    match = await get_match_by_day(get_sports_rotation_key())
+    if not match:
+        await interaction.response.send_message("❌ No sports match exists yet for today.", ephemeral=True)
+        return
+    if match["status"] != "open":
+        await interaction.response.send_message(
+            "❌ Today's match is already settled. A new one opens at the next 8 AM PST rollover.",
+            ephemeral=True,
+        )
+        return
+
+    summary = await settle_match(match)
+    await interaction.response.send_message(
+        content="✅ Match force-settled. Winners have been paid.",
+        embed=_result_embed(summary),
+        ephemeral=True,
+    )

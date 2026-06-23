@@ -2,6 +2,7 @@ from discord import ui, Interaction, ButtonStyle
 from src.casino.blackjack import start_blackjack
 from src.casino.slots import play_slots
 from src.casino.roulette import RouletteBetView
+from src.casino.sports_view import open_sportsbook
 
 class CasinoView(ui.View):
     def __init__(self, user_id):
@@ -30,6 +31,13 @@ class CasinoView(ui.View):
             return
         view = RouletteBetView(interaction.user.id)
         await interaction.response.send_message("🎡 **Roulette** — choose your bet type:", view=view, ephemeral=True)
+
+    @ui.button(label="🏟️ Sports Bet", style=ButtonStyle.blurple, custom_id="sportsbet")
+    async def sportsbet_button(self, interaction: Interaction, button: ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ Not your casino session.", ephemeral=True)
+            return
+        await open_sportsbook(interaction)
 
     @ui.button(label="✖ Close", style=ButtonStyle.secondary, custom_id="casino_close")
     async def close_button(self, interaction: Interaction, button: ui.Button):
